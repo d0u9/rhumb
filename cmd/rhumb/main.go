@@ -24,7 +24,7 @@ commands:
   reservations <network>       print the address reservations a router should hold
   migrate node --node from=<old>,to=<new> [--network ...] [--apply --yes]
                                report, or apply, moving a node's workload to another node
-  deploy build <export-dir> --to <bundle> [--platform os/arch] [--bin file] [--services dir]
+  deploy build <export-dir> --to <bundle> [--platform os/arch] [--download build|install] [--bin file] [--services dir]
                                bundle one exported instance with its program and ctl
   deploy gc [--yes]            list, or remove, what deleted bundles left registered
 

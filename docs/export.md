@@ -804,10 +804,11 @@ no secret is written into the unit.
 A service's deploy definition names where its program comes from under
 `binary`, with exactly one of:
 
-- `release` downloads a published archive when the bundle is built, so the
-  bundle carries the program. With `github: owner/repo`, `version: latest` is
-  the newest release, looked up at build time, and `url` may be only the
-  asset's name.
+- `release` is a published archive. By default it is downloaded when the
+  bundle is built, so the bundle carries the program; `--download install`
+  leaves that to `ctl install`, which needs `curl` and the network on the
+  machine. With `github: owner/repo`, `version: latest` is the newest release,
+  looked up when it is downloaded, and `url` may be only the asset's name.
 - `apt` is the package `ctl install` installs with apt, when the program is
   not on the machine already.
 - `path` is where it already is on the machine; nothing installs it.

@@ -25,7 +25,17 @@ type Options struct {
 	// Binary is a local program to bundle instead of what the source
 	// would give, for a machine with no network or a build of one's own.
 	Binary string
+	// Download says when a release is downloaded: DownloadBuild (the
+	// default) into the bundle, or DownloadInstall by ctl install on the
+	// machine, which keeps the bundle small and needs the machine online.
+	Download string
 }
+
+// When a release is downloaded.
+const (
+	DownloadBuild   = "build"
+	DownloadInstall = "install"
+)
 
 // Build writes the bundle for the exported instance in src into dst.
 //
@@ -96,13 +106,17 @@ func Build(src, dst string, opt Options) error {
 	case opt.Binary != "":
 		source = SourceRelease // carried in the bundle like a release
 		err = copyFile(opt.Binary, bin, 0o755)
-	case source == SourceRelease:
+	case source == SourceRelease && opt.Download == DownloadInstall:
+		source = sourceReleaseOnMachine
+	case source == SourceRelease && (opt.Download == "" || opt.Download == DownloadBuild):
 		err = fetch(svc, platform, bin)
+	case source == SourceRelease:
+		err = fmt.Errorf("download %q is not %s or %s", opt.Download, DownloadBuild, DownloadInstall)
 	}
 	if err != nil {
 		return err
 	}
-	ctl, err := renderCtl(tmpl, m, svc, label, source)
+	ctl, err := renderCtl(tmpl, m, svc, label, source, platform)
 	if err != nil {
 		return err
 	}
@@ -204,7 +218,7 @@ var ctlTemplates = map[string]*template.Template{
 	"linux":  template.Must(template.New("ctl").Parse(ctlLinux)),
 }
 
-func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source string) ([]byte, error) {
+func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, platform string) ([]byte, error) {
 	args := make([]string, len(svc.Command))
 	for i, a := range svc.Command {
 		args[i] = shellArg(a)
@@ -217,8 +231,11 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source s
 	err := tmpl.Execute(&out, map[string]any{
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
-		"BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source),
+		"BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
+	if err != nil {
+		return nil, err
+	}
 	return out.Bytes(), err
 }
 
@@ -236,7 +253,7 @@ func binDir(svc Service, source string) string {
 
 // installBinary is the body of ctl's install_binary: what puts the program
 // on the machine when the bundle does not carry it.
-func installBinary(svc Service, source string) string {
+func installBinary(svc Service, source, platform string) string {
 	name := shQuote(svc.Binary.Name)
 	src := svc.Binary
 	switch source {
@@ -244,6 +261,42 @@ func installBinary(svc Service, source string) string {
 		return fmt.Sprintf("[ -x %s ] || { echo \"%s is not on this machine\" >&2; exit 1; }", shQuote(src.Path), strings.ReplaceAll(src.Path, `"`, ""))
 	case SourceApt:
 		return fmt.Sprintf("command -v %s >/dev/null 2>&1 || { apt-get update && apt-get install -y %s; }\n\tBIN=%s", name, shQuote(src.Apt), binDir(svc, source))
+	case sourceReleaseOnMachine:
+		return releaseOnMachine(svc, platform)
 	}
 	return ":"
+}
+
+// sourceReleaseOnMachine is a release that ctl install downloads.
+const sourceReleaseOnMachine = "release, downloaded on the machine,"
+
+// releaseOnMachine is the shell that downloads the release on the machine
+// and unpacks the binary into bin/. "latest" is looked up there, when
+// installing; a binary already in bin/ is kept.
+func releaseOnMachine(svc Service, platform string) string {
+	rel := *svc.Binary.Release
+	const mark = "@RHUMB_VERSION@"
+	version := shQuote(rel.Version)
+	if rel.Version == "latest" {
+		version = `$(curl -fsSL https://api.github.com/repos/` + rel.GitHub + `/releases/latest | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1)`
+	}
+	rel.Version = mark
+	url, err := rel.URLFor(platform)
+	if err != nil {
+		return fmt.Sprintf("echo %s >&2; exit 1", shQuote(err.Error()))
+	}
+	url = strings.ReplaceAll(shQuote(url), mark, `'"$VERSION"'`)
+	name := shQuote(svc.Binary.Name)
+	return strings.Join([]string{
+		`[ -x "$DIR/bin/"` + name + ` ] && return 0`,
+		`command -v curl >/dev/null 2>&1 || { echo "downloading the release needs curl" >&2; exit 1; }`,
+		`VERSION=` + version,
+		`[ -n "$VERSION" ] || { echo "could not look up the latest release" >&2; exit 1; }`,
+		`tmp=$(mktemp -d)`,
+		`curl -fsSL ` + url + ` -o "$tmp/archive"`,
+		`tar -xf "$tmp/archive" -C "$tmp" ` + name,
+		`mkdir -p "$DIR/bin" && install -m 755 "$tmp/"` + name + ` "$DIR/bin/"` + name,
+		`rm -rf "$tmp"`,
+		`echo "installed ` + svc.Binary.Name + ` $VERSION"`,
+	}, "\n\t")
 }
