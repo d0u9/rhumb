@@ -258,3 +258,17 @@ func TestBuild_Capabilities(t *testing.T) {
 		t.Error("a launchd bundle took capabilities")
 	}
 }
+
+func TestRelease_TagAndBareBinary(t *testing.T) {
+	r := Release{GitHub: "o/r", Version: "2.12.3", Tag: "app/v{version}", URL: "p-{target}", Targets: map[string]string{"linux/amd64": "linux-amd64"}}
+	got, err := r.URLFor("linux/amd64")
+	if err != nil || got != "https://github.com/o/r/releases/download/app/v2.12.3/p-linux-amd64" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if r.Archive() {
+		t.Error("a bare binary is taken for an archive")
+	}
+	if !(Release{URL: "c_{version}.tar.gz"}).Archive() {
+		t.Error("a tar.gz is not taken for an archive")
+	}
+}

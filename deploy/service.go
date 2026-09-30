@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -55,8 +56,12 @@ type Release struct {
 	// when the bundle is built.
 	GitHub  string `yaml:"github"`
 	Version string `yaml:"version"`
+	// Tag is the release's tag, {version} filled in; v{version} when
+	// empty. A "latest" version is what the tag holds at {version}.
+	Tag string `yaml:"tag"`
 	// URL is the archive's address, {version} and {target} filled in.
-	// With GitHub it may be only the asset's name.
+	// With GitHub it may be only the asset's name. An address that names
+	// no tar archive is the binary itself.
 	URL string `yaml:"url"`
 	// Targets maps GOOS/GOARCH to the release's name for the platform.
 	Targets map[string]string `yaml:"targets"`
@@ -150,8 +155,26 @@ func (r Release) Resolve() (Release, error) {
 	if rel.Tag == "" {
 		return r, fmt.Errorf("latest release of %s has no tag", r.GitHub)
 	}
-	r.Version = strings.TrimPrefix(rel.Tag, "v")
+	prefix, suffix, _ := strings.Cut(r.TagPattern(), "{version}")
+	if !strings.HasPrefix(rel.Tag, prefix) || !strings.HasSuffix(rel.Tag, suffix) {
+		return r, fmt.Errorf("latest release of %s is tagged %s, not %s", r.GitHub, rel.Tag, r.TagPattern())
+	}
+	r.Version = strings.TrimSuffix(strings.TrimPrefix(rel.Tag, prefix), suffix)
 	return r, nil
+}
+
+// TagPattern is the release's tag with {version} in it.
+func (r Release) TagPattern() string {
+	if r.Tag == "" {
+		return "v{version}"
+	}
+	return r.Tag
+}
+
+// Archive says whether the release is a tar archive holding the binary,
+// rather than the binary itself.
+func (r Release) Archive() bool {
+	return strings.Contains(path.Base(r.URL), ".tar") || strings.HasSuffix(r.URL, ".tgz")
 }
 
 // URLFor is where the archive for platform ("darwin/arm64") is downloaded
@@ -168,7 +191,7 @@ func (r Release) URLFor(platform string) (string, error) {
 	}
 	url := r.URL
 	if r.GitHub != "" && !strings.Contains(url, "://") {
-		url = "https://github.com/" + r.GitHub + "/releases/download/v{version}/" + url
+		url = "https://github.com/" + r.GitHub + "/releases/download/" + r.TagPattern() + "/" + url
 	}
 	return strings.NewReplacer("{version}", r.Version, "{target}", target).Replace(url), nil
 }
