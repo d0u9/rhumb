@@ -26,6 +26,9 @@ type Service struct {
 		Sources `yaml:",inline"`
 	} `yaml:"binary"`
 	Command []string `yaml:"command"`
+	// Requires are programs the machine must have for the bundle to run,
+	// which install checks for.
+	Requires []string `yaml:"requires"`
 	// EnvFiles are rendered files, in conf/, that hold the program's
 	// environment as KEY=VALUE lines. Only the service manager reads them,
 	// so a secret in one never appears in the unit or plist.
@@ -79,6 +82,9 @@ type Release struct {
 	// Tag is the release's tag, {version} filled in; v{version} when
 	// empty. A "latest" version is what the tag holds at {version}.
 	Tag string `yaml:"tag"`
+	// Member is the binary's path inside the archive, {version} and
+	// {target} filled in; the binary's name, at the top, when empty.
+	Member string `yaml:"member"`
 	// URL is the archive's address, {version} and {target} filled in.
 	// With GitHub it may be only the asset's name. An address that names
 	// no tar archive is the binary itself.
@@ -109,8 +115,35 @@ func (s Sources) Names() []string {
 	return out
 }
 
-//go:embed services/*.yaml
+// builtin holds rhumb's definitions, services/<name>.yaml, and beside each
+// the files it ships in bin/, services/<name>/.
+//
+//go:embed services
 var builtin embed.FS
+
+// shipped is the files a built-in definition puts in bin/ beside the
+// program, by name.
+func shipped(name string) (map[string][]byte, error) {
+	entries, err := fs.ReadDir(builtin, "services/"+name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]byte{}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := fs.ReadFile(builtin, "services/"+name+"/"+e.Name())
+		if err != nil {
+			return nil, err
+		}
+		out[e.Name()] = data
+	}
+	return out, nil
+}
 
 // LoadService reads name's definition from dir when dir is given and holds
 // one, and from the definitions built into rhumb otherwise.
@@ -202,6 +235,14 @@ func (r Release) Archive() bool {
 
 // URLFor is where the archive for platform ("darwin/arm64") is downloaded
 // from. The version must already be resolved.
+// MemberFor is the binary's path inside the archive for platform.
+func (r Release) MemberFor(platform, name string) string {
+	if r.Member == "" {
+		return name
+	}
+	return strings.NewReplacer("{version}", r.Version, "{target}", r.Targets[platform]).Replace(r.Member)
+}
+
 func (r Release) URLFor(platform string) (string, error) {
 	target, ok := r.Targets[platform]
 	if !ok {

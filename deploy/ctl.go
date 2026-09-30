@@ -28,6 +28,12 @@ AGENT="$HOME/Library/LaunchAgents/$LABEL.plist"
 SESSION="$DIR/var/$LABEL.plist"
 # The program comes from its {{.Source}} source; BIN is its directory.
 BIN={{.BinDir}}
+# requires fails install when a program the bundle runs with is missing.
+requires() {
+	for p in {{.Requires}}; do
+		command -v "$p" >/dev/null 2>&1 || { echo "this bundle needs $p on \$PATH; install it and run ./ctl install again" >&2; exit 1; }
+	done
+}
 install_binary() {
 	{{.InstallBinary}}
 }
@@ -83,6 +89,10 @@ EOF
 		cat <<EOF
 	</array>
 	<key>WorkingDirectory</key><string>$(printf %s "$DIR/var" | xml)</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key><string>$(printf %s "$PATH" | xml)</string>
+	</dict>
 	<key>RunAtLoad</key><true/>
 	<key>KeepAlive</key><true/>
 	<key>StandardOutPath</key><string>$(printf %s "$DIR/var/log/out.log" | xml)</string>
@@ -138,7 +148,7 @@ unlink_shims() {
 
 case "${1:-}" in
 install)
-	copy_in; install_binary; self_signed; link
+	requires; copy_in; install_binary; self_signed; link
 	echo "installed; ./ctl start runs it now, ./ctl enable at every login"
 	;;
 uninstall)
@@ -295,6 +305,12 @@ LABEL={{.Label}}
 UNIT="/etc/systemd/system/$LABEL.service"
 # The program comes from its {{.Source}} source; BIN is its directory.
 BIN={{.BinDir}}
+# requires fails install when a program the bundle runs with is missing.
+requires() {
+	for p in {{.Requires}}; do
+		command -v "$p" >/dev/null 2>&1 || { echo "this bundle needs $p on \$PATH; install it and run ./ctl install again" >&2; exit 1; }
+	done
+}
 install_binary() {
 	{{.InstallBinary}}
 }
@@ -405,7 +421,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) as_root "$@"; copy_in; install_binary; self_signed; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+install) requires; as_root "$@"; copy_in; install_binary; self_signed; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi

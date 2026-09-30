@@ -35,6 +35,10 @@ type Manifest struct {
 	Platform string `yaml:"platform"`
 	// Download is when its node says a release is downloaded.
 	Download string `yaml:"download"`
+	// Profile is the device profile whose program this is, and Routes the
+	// routes its configuration was rendered with.
+	Profile string   `yaml:"profile"`
+	Routes  []string `yaml:"routes"`
 	// Dir is where ctl install puts a Linux host bundle.
 	Dir   string `yaml:"dir"`
 	Files []struct {

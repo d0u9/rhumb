@@ -1,0 +1,22 @@
+# sing-box as a device's local proxy: a device profile that runs it is one
+# process over the profile's routes. rhumb renders its whole configuration
+# into conf/config.json from the singbox service; bin/singbox.py runs it,
+# adding the outbounds added on this machine with `singbox.py add`
+# (ss:// and hysteria2:// links, or sing-box JSON) to the selector and the
+# urltest, and switches outbound and mode through the Clash API.
+binary:
+  name: sing-box
+  release:
+    github: SagerNet/sing-box
+    version: latest
+    url: sing-box-{version}-{target}.tar.gz
+    member: sing-box-{version}-{target}/sing-box
+    targets:
+      darwin/arm64: darwin-arm64
+      darwin/amd64: darwin-amd64
+      linux/arm64: linux-arm64
+      linux/amd64: linux-amd64
+requires: [python3]
+command: ["{bin}/singbox.py", "run"]
+# singbox.py on $PATH: add, list, remove, use, mode, status.
+expose: [singbox.py]
