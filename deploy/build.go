@@ -25,9 +25,9 @@ type Options struct {
 	// Binary is a local program to bundle instead of what the source
 	// would give, for a machine with no network or a build of one's own.
 	Binary string
-	// Download says when a release is downloaded: DownloadBuild (the
-	// default) into the bundle, or DownloadInstall by ctl install on the
-	// machine, which keeps the bundle small and needs the machine online.
+	// Download says when a release is downloaded: DownloadInstall (the
+	// default) by ctl install on the machine, which keeps the bundle small
+	// and needs the machine online, or DownloadBuild into the bundle.
 	Download string
 }
 
@@ -109,9 +109,9 @@ func Build(src, dst string, opt Options) error {
 	case opt.Binary != "":
 		source = SourceRelease // carried in the bundle like a release
 		err = copyFile(opt.Binary, bin, 0o755)
-	case source == SourceRelease && opt.Download == DownloadInstall:
+	case source == SourceRelease && (opt.Download == "" || opt.Download == DownloadInstall):
 		source = sourceReleaseOnMachine
-	case source == SourceRelease && (opt.Download == "" || opt.Download == DownloadBuild):
+	case source == SourceRelease && opt.Download == DownloadBuild:
 		err = fetch(svc, platform, bin)
 	case source == SourceRelease:
 		err = fmt.Errorf("download %q is not %s or %s", opt.Download, DownloadBuild, DownloadInstall)

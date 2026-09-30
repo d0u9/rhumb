@@ -816,10 +816,10 @@ Caddy's certificates, stays in the install dir across reinstalls.
 A service's deploy definition names where its program comes from under
 `binary`, with exactly one of:
 
-- `release` is a published archive. By default it is downloaded when the
-  bundle is built, so the bundle carries the program; `--download install`
-  leaves that to `ctl install`, which needs `curl` and the network on the
-  machine. With `github: owner/repo`, `version: latest` is the newest release,
+- `release` is a published archive. By default `ctl install` downloads it
+  on the machine, which needs `curl` and the network there; `--download
+  build` downloads it when the bundle is built, so the bundle carries the
+  program. With `github: owner/repo`, `version: latest` is the newest release,
   looked up when it is downloaded, and `url` may be only the asset's name.
   `tag` is the release's tag around `{version}`, `v{version}` by default
   (Hysteria's is `app/v{version}`). A `url` naming no tar archive is the
