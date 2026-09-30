@@ -51,6 +51,10 @@ type Service struct {
 		Start []string `yaml:"start"`
 		Stop  []string `yaml:"stop"`
 	} `yaml:"hooks"`
+	// Notice is a command ctl runs after install, start and status to tell
+	// the user something only the running program knows, such as the address
+	// of its web panel. Its failure is ignored: a notice never fails ctl.
+	Notice []string `yaml:"notice"`
 }
 
 // SelfSigned names the pair's files, relative to var/. The certificate is

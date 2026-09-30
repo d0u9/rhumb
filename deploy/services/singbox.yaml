@@ -18,5 +18,8 @@ binary:
       linux/amd64: linux-amd64
 requires: [python3]
 command: ["{bin}/singbox.py", "run"]
-# singbox.py on $PATH: add, list, remove, use, mode, status.
+# singbox.py (add, list, remove, use, mode, status, panel) is in bin/;
+# `ctl link` puts it on $PATH.
 expose: [singbox.py]
+# ctl start and status say where the web panel is.
+notice: ["{bin}/singbox.py", "panel"]

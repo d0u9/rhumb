@@ -10,6 +10,7 @@
     singbox.py use <tag|auto>      pick the outbound while it runs
     singbox.py mode <rule|global|direct>
     singbox.py status              the mode and the outbound in use
+    singbox.py panel               where the web panel is
 
 The configuration is rhumb's: conf/config.json, rendered by the singbox
 service from the profile's routes, one outbound per route behind the selector
@@ -221,6 +222,14 @@ def api(method, path, body=None):
         fail("sing-box is not answering on %s: %s; is it running?" % (where, e))
 
 
+def panel():
+    where = controller()
+    host, _, port = where.rpartition(":")
+    if host in ("", "0.0.0.0", "::", "[::]"):
+        host = "127.0.0.1"
+    print("web panel: http://%s:%s/ui/  (open in a browser; or: open http://%s:%s/ui/)" % (host, port, host, port))
+
+
 def main(argv):
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "run" and not args:
@@ -240,10 +249,13 @@ def main(argv):
         api("PUT", "/proxies/proxy", {"name": args[0]})
     elif cmd == "mode" and len(args) == 1 and args[0].lower() in ("rule", "global", "direct"):
         api("PATCH", "/configs", {"mode": args[0].capitalize()})
+    elif cmd == "panel" and not args:
+        panel()
     elif cmd == "status" and not args:
         mode = api("GET", "/configs").get("mode")
         now = api("GET", "/proxies/proxy").get("now")
-        print("mode %s, outbound %s, panel http://%s/ui/" % (mode, now, controller()))
+        print("mode %s, outbound %s" % (mode, now))
+        panel()
     else:
         print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
         sys.exit(2)

@@ -806,10 +806,13 @@ and starts the unit, which runs as the owner of the unpacked bundle with the
 install dir's `var/` as its working directory.
 
 On macOS the bundle stays where it was unpacked unless `deploy.dir` says
-otherwise, and install only puts the program in place and links its commands:
-nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
+otherwise, and install only puts the program in place: nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
 `ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
 disable` takes that back. Either way launchd restarts it when it exits.
+
+On either system install puts nothing on `$PATH`: a bundle's commands, such
+as `singbox.py`, run from its `bin/`, and `ctl link` puts them in
+`~/.local/bin` for whoever wants them there. `ctl unlink` takes them off.
 
 A device profile that `runs` a program is one instance and one bundle,
 whatever routes it takes; its manifest names the `profile` and the `routes`
