@@ -7,7 +7,7 @@ package deploy
 const ctlDarwin = `#!/bin/sh
 # ctl for {{.M.Node}}/{{.M.Instance}} ({{.M.Service}}), written by rhumb deploy.
 #
-#   ./ctl install      put the program in place and link commands; nothing starts
+#   ./ctl install      put the program in place; nothing starts
 #   ./ctl start | stop     run under launchd until stopped or logged out
 #   ./ctl enable | disable start at every login, or no longer
 #   ./ctl uninstall    stop, disable, unlink; --purge also deletes var/
@@ -49,6 +49,12 @@ EXPOSE="{{.Expose}}"
 # is this bundle's.
 MARK="# rhumb-bundle: $DIR"
 
+# notice tells what only the running program knows; it never fails ctl.
+notice() {
+	set -- {{.Notice}}
+	[ $# -gt 0 ] && [ -x "$1" ] || return 0
+	"$@" || true
+}
 command_line() { set -- {{.Args}}; for a; do printf '%s\n' "$a"; done; }
 
 xml() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
@@ -148,8 +154,9 @@ unlink_shims() {
 
 case "${1:-}" in
 install)
-	requires; copy_in; install_binary; self_signed; link
+	requires; copy_in; install_binary; self_signed
 	echo "installed; ./ctl start runs it now, ./ctl enable at every login"
+	[ -z "$EXPOSE" ] || echo "commands are in $BIN; ./ctl link puts them on \$PATH"
 	;;
 uninstall)
 	stop
@@ -157,7 +164,7 @@ uninstall)
 	unlink_shims
 	if [ "${2:-}" = --purge ]; then rm -rf "$DIR/var"; fi
 	;;
-start) start ;;
+start) start; notice ;;
 stop) stop ;;
 enable)
 	was=$(loaded && echo 1 || true)
@@ -176,7 +183,7 @@ disable)
 	echo "no longer starts at login"
 	;;
 reload) if loaded; then stop; start; fi ;;
-status) status ;;
+status) status; if loaded; then notice; fi ;;
 logs) tail -n 100 "$DIR"/var/log/*.log ;;
 link) link ;;
 unlink) unlink_shims ;;
@@ -311,6 +318,12 @@ requires() {
 		command -v "$p" >/dev/null 2>&1 || { echo "this bundle needs $p on \$PATH; install it and run ./ctl install again" >&2; exit 1; }
 	done
 }
+# notice tells what only the running program knows; it never fails ctl.
+notice() {
+	set -- {{.Notice}}
+	[ $# -gt 0 ] && [ -x "$1" ] || return 0
+	"$@" || true
+}
 install_binary() {
 	{{.InstallBinary}}
 }
@@ -421,7 +434,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) requires; as_root "$@"; copy_in; install_binary; self_signed; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+install) requires; as_root "$@"; copy_in; install_binary; self_signed; write_unit; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3; notice ;;
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi
@@ -432,10 +445,10 @@ uninstall)
 	unlink_shims
 	if [ "${2:-}" = --purge ]; then rm -rf "$DIR/var"; fi
 	;;
-start) as_root "$@"; systemctl start "$LABEL" ;;
+start) as_root "$@"; systemctl start "$LABEL"; notice ;;
 stop) as_root "$@"; systemctl stop "$LABEL" ;;
 reload) as_root "$@"; write_unit; systemctl restart "$LABEL" ;;
-status) systemctl --no-pager status "$LABEL" ;;
+status) systemctl --no-pager status "$LABEL" || true; notice ;;
 logs) shift; journalctl --no-pager -u "$LABEL" -n 100 "$@" ;;
 link) as_root "$@"; link ;;
 unlink) as_root "$@"; unlink_shims ;;

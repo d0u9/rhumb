@@ -276,7 +276,8 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"Capabilities": strings.Join(svc.Capabilities, " "),
 		"Requires":     strings.Join(svc.Requires, " "),
 		"HookStart":    shellArgs(svc.Hooks.Start), "HookStop": shellArgs(svc.Hooks.Stop),
-		"Dir": installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
+		"Notice": shellArgs(svc.Notice),
+		"Dir":    installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
 		return nil, err
