@@ -218,3 +218,18 @@ command: ["{bin}/sslocal"]
 		t.Fatalf("ctl does not parse: %s", out)
 	}
 }
+
+func TestDescribe(t *testing.T) {
+	m, err := ParseManifest([]byte("schema: 1\nnode: n\ninstance: i\nservice: microbin\nruntime: host\nplatform: linux/amd64\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := Describe(m, Options{Download: DownloadInstall})
+	if d.Err != nil || d.Manager != "systemd" || d.Platform != "linux/amd64" || d.Binary != "microbin latest release, downloaded on the machine" {
+		t.Fatalf("Describe = %+v", d)
+	}
+	m.Platform = "plan9/386"
+	if Describe(m, Options{}).Err == nil {
+		t.Fatal("a platform with no service manager described as buildable")
+	}
+}

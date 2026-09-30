@@ -51,6 +51,12 @@ func ReadManifest(dir string) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
+	return ParseManifest(data)
+}
+
+// ParseManifest reads a manifest from its bytes.
+func ParseManifest(data []byte) (Manifest, error) {
+	var m Manifest
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return m, fmt.Errorf("%s: %w", ManifestFile, err)
 	}
