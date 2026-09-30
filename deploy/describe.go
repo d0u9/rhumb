@@ -53,6 +53,12 @@ func Describe(m Manifest, opt Options) Description {
 		return d
 	}
 	switch {
+	case len(svc.EnvFiles) > 0 && d.Manager == "launchd":
+		d.Err = fmt.Errorf("service %q: env_files is not supported by launchd bundles yet", m.Service)
+	case len(svc.Capabilities) > 0 && d.Manager != "systemd":
+		d.Err = fmt.Errorf("service %q: capabilities are Linux's; %s has none to give", m.Service, d.Platform)
+	}
+	switch {
 	case opt.Binary != "":
 		d.Binary = "local " + opt.Binary
 	case svc.Binary.Release != nil:
