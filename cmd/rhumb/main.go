@@ -22,6 +22,8 @@ commands:
   secret sync [--yes]          generate the secrets the inventory implies
   init [dir] [--gitignore]     write the scaffold a generator root starts from
   reservations <network>       print the address reservations a router should hold
+  migrate node --node from=<old>,to=<new> [--network ...] [--apply --yes]
+                               report, or apply, moving a node's workload to another node
 
 --root and --secrets default to $RHUMB_ROOT and $RHUMB_SECRETS.
 `
@@ -92,6 +94,14 @@ func run(args []string, in io.Reader, out, errOut io.Writer) error {
 		}
 	case "reservations":
 		action = cli.Reservations
+	case "migrate":
+		for _, n := range []string{"node", "network", "instance", "route", "published", "scenario"} {
+			str(n, "migration plan: "+n+" changes")
+		}
+		boolean("apply", "write the plan into the root")
+		boolean("yes", "apply without asking")
+		boolean("y", "same as --yes")
+		action = cli.Migrate
 	default:
 		global.Usage()
 		return fmt.Errorf("unknown command %q", cmd)
