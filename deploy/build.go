@@ -235,12 +235,24 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
 		"Capabilities": strings.Join(svc.Capabilities, " "),
-		"BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
+		"Dir":          shQuote(installDir(m)), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out.Bytes(), err
+}
+
+// DefaultInstallRoot is where a Linux host bundle is installed when its
+// manifest names no dir: <root>/<service>.
+const DefaultInstallRoot = "/srv/rhumb"
+
+// installDir is where ctl install puts a Linux host bundle.
+func installDir(m Manifest) string {
+	if m.Dir != "" {
+		return m.Dir
+	}
+	return path.Join(DefaultInstallRoot, m.Service)
 }
 
 // binDir is the shell expression ctl sets BIN to: the directory the

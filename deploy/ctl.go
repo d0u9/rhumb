@@ -224,18 +224,21 @@ esac
 const ctlLinux = `#!/bin/sh
 # ctl for {{.M.Node}}/{{.M.Instance}} ({{.M.Service}}), written by rhumb deploy.
 #
-#   ./ctl install      register with systemd, link commands, start
+#   ./ctl install      copy into the install dir, register with systemd,
+#                      link commands, start
 #   ./ctl uninstall    stop, unregister, unlink; --purge also deletes var/
 #   ./ctl start | stop | reload | status | logs
 #   ./ctl link | unlink    put the bundle's commands on the owner's $PATH
 #   ./ctl run          run in the foreground, for debugging
 #
-# The bundle may live anywhere: every path below is found from this file.
-# The program runs as the owner of this directory, with var/ as its
-# working directory.
+# The bundle may be unpacked anywhere. install copies ctl, bin/, conf/ and
+# manifest.yaml into DIR, replacing what was there and keeping DIR/var, the
+# program's state; the unpacked bundle may then be deleted. The program runs
+# as the owner of the unpacked bundle, with DIR/var as its working directory.
 set -eu
 
-DIR=$(cd "$(dirname "$0")" && pwd -P)
+HERE=$(cd "$(dirname "$0")" && pwd -P)
+DIR={{.Dir}}
 LABEL={{.Label}}
 UNIT="/etc/systemd/system/$LABEL.service"
 # The program comes from its {{.Source}} source; BIN is its directory.
@@ -243,8 +246,8 @@ BIN={{.BinDir}}
 install_binary() {
 	{{.InstallBinary}}
 }
-OWNER=$(stat -c %U "$DIR")
-GROUP=$(stat -c %G "$DIR")
+OWNER=$(stat -c %U "$HERE")
+GROUP=$(stat -c %G "$HERE")
 SHIMS="$(getent passwd "$OWNER" | cut -d: -f6)/.local/bin"
 EXPOSE="{{.Expose}}"
 # A shim carries this line, which is how unlink knows it is this bundle's.
@@ -262,6 +265,19 @@ unit_path() { printf %s "$1" | sed -e 's/%/%%/g'; }
 unit_word() { printf '"%s"' "$(printf %s "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/%/%%/g')"; }
 
 as_root() { [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"; }
+
+# copy_in replaces DIR's copy of the bundle with this one, leaving var/.
+copy_in() {
+	[ "$HERE" != "$DIR" ] || return 0
+	install -d -o "$OWNER" -g "$GROUP" -m 755 "$DIR"
+	rm -rf "$DIR/bin" "$DIR/conf"
+	for f in ctl manifest.yaml bin conf; do
+		[ ! -e "$HERE/$f" ] || cp -a "$HERE/$f" "$DIR/$f"
+	done
+	mkdir -p "$DIR/bin"
+	chown -R "$OWNER:$GROUP" "$DIR/ctl" "$DIR/manifest.yaml" "$DIR/bin" "$DIR/conf"
+	echo "installed into $DIR; $HERE may be deleted"
+}
 
 write_unit() {
 	install -d -o "$OWNER" -g "$GROUP" -m 700 "$DIR/var"
@@ -321,7 +337,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) as_root "$@"; install_binary; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+install) as_root "$@"; copy_in; install_binary; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi
