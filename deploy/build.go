@@ -72,6 +72,9 @@ func Build(src, dst string, opt Options) error {
 	if len(svc.EnvFiles) > 0 && strings.HasPrefix(platform, "darwin/") {
 		return fmt.Errorf("service %q: env_files is not supported by launchd bundles yet", m.Service)
 	}
+	if len(svc.Capabilities) > 0 && !strings.HasPrefix(platform, "linux/") {
+		return fmt.Errorf("service %q: capabilities are Linux's; %s has none to give", m.Service, platform)
+	}
 	label := Label(m)
 	if old, err := os.ReadFile(filepath.Join(dst, "ctl")); err == nil && !bytes.Contains(old, []byte("LABEL="+label+"\n")) {
 		return fmt.Errorf("%s holds another bundle; not replacing it", dst)
@@ -231,6 +234,7 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 	err := tmpl.Execute(&out, map[string]any{
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
+		"Capabilities": strings.Join(svc.Capabilities, " "),
 		"BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
