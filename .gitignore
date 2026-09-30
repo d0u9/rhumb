@@ -1,0 +1,15 @@
+# Build output
+/bin/
+/dist/
+*.test
+*.out
+
+# Local Go workspace: it points at sibling checkouts on one machine
+go.work
+go.work.sum
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
