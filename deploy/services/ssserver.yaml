@@ -1,0 +1,14 @@
+# shadowsocks-rust's server. The export renders its whole configuration,
+# every port and its accounts, into ssserver.json.
+binary:
+  name: ssserver
+  release:
+    github: shadowsocks/shadowsocks-rust
+    version: latest
+    url: shadowsocks-v{version}.{target}.tar.xz
+    targets:
+      darwin/arm64: aarch64-apple-darwin
+      darwin/amd64: x86_64-apple-darwin
+      linux/arm64: aarch64-unknown-linux-gnu
+      linux/amd64: x86_64-unknown-linux-gnu
+command: ["{bin}/ssserver", "-c", "{conf}/ssserver.json"]
