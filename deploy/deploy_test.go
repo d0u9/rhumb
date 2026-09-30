@@ -187,3 +187,34 @@ func TestRelease_GitHubAssetName(t *testing.T) {
 		t.Fatal("a platform without a build gave a URL")
 	}
 }
+
+// A release downloaded on the machine leaves bin/ empty, and ctl install
+// looks up "latest" and fetches the platform's archive itself.
+func TestBuild_ReleaseDownloadedOnTheMachine(t *testing.T) {
+	defs := t.TempDir()
+	os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte(`binary:
+  name: sslocal
+  release:
+    github: o/r
+    version: latest
+    url: ss-v{version}-{target}.tar.gz
+    targets: {linux/amd64: x86_64}
+command: ["{bin}/sslocal"]
+`), 0o644)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs, Download: DownloadInstall}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "bin", "sslocal")); err == nil {
+		t.Error("the bundle carries the binary")
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	for _, want := range []string{"api.github.com/repos/o/r/releases/latest", `'https://github.com/o/r/releases/download/v'"$VERSION"'/ss-v'"$VERSION"'-x86_64.tar.gz'`} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q:\n%s", want, ctl)
+		}
+	}
+	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
+		t.Fatalf("ctl does not parse: %s", out)
+	}
+}
