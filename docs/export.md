@@ -344,9 +344,29 @@ and starts the container. The instance's directory is the compose project's, so
 its name is the project's name and a named volume's prefix.
 
 A service holds a `docker.yaml` or a [`deploy/`](#a-second-file-what-deploys-it),
-never both. `deploy/` remains for a service whose containers do not fit the
-shape above — several one-shot containers, each with its own mounts — and
-renders its own compose file from templates.
+never both.
+
+**A service that writes its own compose file.** Some programs do not fit the
+shape above — several one-shot containers, each with its own mounts and
+network, started by a timer. Such a service renders its compose file like any
+other file and names it:
+
+```yaml
+# services/ai-digest/docker.yaml
+compose: compose.yaml    # a file the service renders; installed as compose.yaml
+oneshot: true            # install brings nothing up; something else runs it
+setup: setup.sh
+teardown: teardown.sh    # run before `ctl uninstall` stops the project
+files:
+  run: {mode: "0700"}
+```
+
+rhumb still owns the rest: it creates the networks the instance joins, the
+instance's directory (`deploy.dir`, the only key its `deploy` then takes),
+places the files and runs `setup`. Everything the compose file says is the
+service's, so `ports`, `mounts`, `state`, `volumes`, `environment`,
+`privileges`, `reload`, a file's `target` or `env_file`, and any default but
+`dir` are refused beside `compose`: they would be ignored.
 
 ### A second file: what deploys it
 

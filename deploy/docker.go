@@ -30,6 +30,11 @@ type Container struct {
 	Privileges  map[string]any    `yaml:"privileges"`
 	Reload      []string          `yaml:"reload"`
 	Setup       string            `yaml:"setup"`
+	// Compose names the file of the bundle that is the compose file, when
+	// the service wrote its own; nothing above but Dir is then set.
+	Compose  string `yaml:"compose"`
+	OneShot  bool   `yaml:"oneshot"`
+	Teardown string `yaml:"teardown"`
 }
 
 // Mount is one bind mount. Create marks a directory of the instance's own
@@ -185,7 +190,13 @@ func Compose(m Manifest) ([]byte, error) {
 // and starts it. The bundle is only the carrier; what runs lives in that
 // directory, so the bundle can be rebuilt or deleted freely.
 func buildDocker(m Manifest, src, dst string) error {
-	compose, err := Compose(m)
+	var compose []byte
+	var err error
+	if m.Container != nil && m.Container.Compose != "" {
+		compose, err = os.ReadFile(filepath.Join(src, m.Container.Compose))
+	} else {
+		compose, err = Compose(m)
+	}
 	if err != nil {
 		return err
 	}

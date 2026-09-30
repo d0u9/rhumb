@@ -161,3 +161,57 @@ func toStrings(v any) []string {
 	}
 	return out
 }
+
+// A service that writes its own compose file: the bundle carries that file as
+// compose.yaml, and a one-shot project is set up but not brought up.
+func TestBuild_OwnCompose(t *testing.T) {
+	src := t.TempDir()
+	own := "services:\n  step:\n    image: example:1\n    profiles: [manual]\n"
+	for f, body := range map[string]string{"compose.yaml": own, "run": "run\n", "setup.sh": "setup\n", "teardown.sh": "teardown\n"} {
+		os.WriteFile(filepath.Join(src, f), []byte(body), 0o600)
+	}
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
+node: home
+instance: job-01
+service: job
+runtime: docker
+files:
+  - {path: compose.yaml, mode: "0644"}
+  - {path: run, place: run, mode: "0700"}
+  - {path: setup.sh, place: setup.sh, mode: "0644"}
+  - {path: teardown.sh, place: teardown.sh, mode: "0644"}
+networks:
+  - {name: apps, subnet: 172.29.0.0/24}
+container:
+  dir: /srv/docker/job
+  compose: compose.yaml
+  oneshot: true
+  setup: setup.sh
+  teardown: teardown.sh
+`), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dst, "compose.yaml")); string(got) != own {
+		t.Errorf("compose.yaml is not the service's own:\n%s", got)
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	install := string(ctl)[strings.Index(string(ctl), "install)"):strings.Index(string(ctl), "up)")]
+	for _, want := range []string{
+		"docker network create --subnet '172.29.0.0/24' 'apps'",
+		"place 'run' '/srv/docker/job/run' 0700",
+		"(cd \"$DIR\" && sh ./'setup.sh')",
+		"(cd \"$DIR\" && sh ./'teardown.sh')\n\tcompose down",
+	} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q", want)
+		}
+	}
+	if strings.Contains(install, "compose up") || strings.Contains(install, "place 'compose.yaml'") {
+		t.Errorf("install of a one-shot project:\n%s", install)
+	}
+	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
+		t.Fatalf("ctl does not parse: %s", out)
+	}
+}
