@@ -24,7 +24,8 @@ func runDeploy(args []string, out, errOut io.Writer) error {
 		var opt deploy.Options
 		to := fs.String("to", "", "bundle directory to write")
 		fs.StringVar(&opt.Platform, "platform", "", "target os/arch, this machine's by default")
-		fs.StringVar(&opt.Binary, "bin", "", "bundle this program instead of downloading the release")
+		fs.StringVar(&opt.Binary, "bin", "", "bundle this program instead of what the source gives")
+		fs.StringVar(&opt.Source, "source", "", "binary source: release, package, path or script; the service's default when empty")
 		fs.StringVar(&opt.Services, "services", "", "directory of service definitions to prefer")
 		if err := fs.Parse(interleaved(fs, args[1:])); err != nil {
 			return err

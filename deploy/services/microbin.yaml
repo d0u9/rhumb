@@ -2,12 +2,17 @@
 # environment, which the export renders into server.env.
 binary:
   name: microbin
-  version: 2.1.0
-  url: https://github.com/szabodanika/microbin/releases/download/v{version}/microbin-v{version}-{target}.tar.gz
-  targets:
-    darwin/arm64: aarch64-apple-darwin
-    darwin/amd64: x86_64-apple-darwin
-    linux/arm64: aarch64-unknown-linux-musl
-    linux/amd64: x86_64-unknown-linux-musl
+  sources:
+    # The newest GitHub release, looked up when the bundle is built.
+    release:
+      github: szabodanika/microbin
+      version: latest
+      # The asset's name; {version} and {target} are filled in.
+      url: microbin-v{version}-{target}.tar.gz
+      targets:
+        darwin/arm64: aarch64-apple-darwin
+        darwin/amd64: x86_64-apple-darwin
+        linux/arm64: aarch64-unknown-linux-musl
+        linux/amd64: x86_64-unknown-linux-musl
 command: ["{bin}/microbin"]
 env_files: [server.env]

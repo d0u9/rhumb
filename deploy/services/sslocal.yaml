@@ -2,15 +2,18 @@
 # config.json, so the command only points at it.
 binary:
   name: sslocal
-  version: 1.24.0
-  # {version} and {target} are filled in; target is the release's own name
-  # for the platform.
-  url: https://github.com/shadowsocks/shadowsocks-rust/releases/download/v{version}/shadowsocks-v{version}.{target}.tar.xz
-  targets:
-    darwin/arm64: aarch64-apple-darwin
-    darwin/amd64: x86_64-apple-darwin
-    linux/arm64: aarch64-unknown-linux-gnu
-    linux/amd64: x86_64-unknown-linux-gnu
+  sources:
+    release:
+      github: shadowsocks/shadowsocks-rust
+      version: 1.24.0
+      # The asset's name; {version} and {target} are filled in, and target
+      # is the release's own name for the platform.
+      url: shadowsocks-v{version}.{target}.tar.xz
+      targets:
+        darwin/arm64: aarch64-apple-darwin
+        darwin/amd64: x86_64-apple-darwin
+        linux/arm64: aarch64-unknown-linux-gnu
+        linux/amd64: x86_64-unknown-linux-gnu
 # {bin} and {conf} are the bundle's bin/ and conf/ once installed.
 command: ["{bin}/sslocal", "-c", "{conf}/config.json"]
 # Commands put on $PATH by `ctl link`, as shims into bin/.

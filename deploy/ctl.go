@@ -18,6 +18,11 @@ set -eu
 DIR=$(cd "$(dirname "$0")" && pwd -P)
 LABEL={{.Label}}
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+# The program comes from its {{.Source}} source; BIN is its directory.
+BIN={{.BinDir}}
+install_binary() {
+	{{.InstallBinary}}
+}
 DOMAIN="gui/$(id -u)"
 SHIMS="$HOME/.local/bin"
 EXPOSE="{{.Expose}}"
@@ -86,7 +91,7 @@ link() {
 			echo "$shim exists and is not this bundle's; not replacing it" >&2
 			exit 1
 		fi
-		printf '#!/bin/sh\n%s\nexec "%s/bin/%s" "$@"\n' "$MARK" "$DIR" "$name" >"$shim"
+		printf '#!/bin/sh\n%s\nexec "%s/%s" "$@"\n' "$MARK" "$BIN" "$name" >"$shim"
 		chmod 755 "$shim"
 	done
 }
@@ -99,7 +104,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) write_plist; link; stop; start ;;
+install) install_binary; write_plist; link; stop; start ;;
 uninstall)
 	stop
 	rm -f "$PLIST"
@@ -233,6 +238,11 @@ set -eu
 DIR=$(cd "$(dirname "$0")" && pwd -P)
 LABEL={{.Label}}
 UNIT="/etc/systemd/system/$LABEL.service"
+# The program comes from its {{.Source}} source; BIN is its directory.
+BIN={{.BinDir}}
+install_binary() {
+	{{.InstallBinary}}
+}
 OWNER=$(stat -c %U "$DIR")
 GROUP=$(stat -c %G "$DIR")
 SHIMS="$(getent passwd "$OWNER" | cut -d: -f6)/.local/bin"
@@ -285,7 +295,7 @@ link() {
 			echo "$shim exists and is not this bundle's; not replacing it" >&2
 			exit 1
 		fi
-		printf '#!/bin/sh\n%s\nexec "%s/bin/%s" "$@"\n' "$MARK" "$DIR" "$name" >"$shim"
+		printf '#!/bin/sh\n%s\nexec "%s/%s" "$@"\n' "$MARK" "$BIN" "$name" >"$shim"
 		chown "$OWNER:$GROUP" "$shim"
 		chmod 755 "$shim"
 	done
@@ -299,7 +309,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) as_root "$@"; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+install) as_root "$@"; install_binary; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi
