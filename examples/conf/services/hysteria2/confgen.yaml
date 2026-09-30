@@ -1,0 +1,24 @@
+# Hysteria2, server side. A service is one program: this is `hysteria server`,
+# and the client side would be another service, since the two read
+# configurations with nothing in common.
+
+# One password per principal. Hysteria2's userpass takes any string — unlike
+# Shadowsocks 2022, which wants base64 of exactly the key size — so a long
+# random value is all this needs.
+secret:
+  kind: base64
+  bytes: 32
+
+# per-principal: one credential for each principal reaching it, and an account
+# table rendered from them.
+auth: per-principal
+
+# This template renders one account table at a time, so rotating someone's
+# password drops their connection rather than overlapping with it.
+rotation: disruptive
+
+template: templates/config.yaml.tmpl
+# document: the defaults are one whole configuration, and the instance's
+# `values` merge over them. Hysteria's config.yaml is one document, not a list.
+defaults: document
+output: config.yaml

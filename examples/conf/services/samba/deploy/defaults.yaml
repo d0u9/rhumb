@@ -1,0 +1,16 @@
+# What starting a Samba instance needs and the model does not hold.
+#
+# No port mapping here: it is derived from the instance's `ports` and the
+# edges entering them, which is the reason this second file is generated
+# rather than kept by hand.
+image: ghcr.io/example/samba:latest
+restart: unless-stopped
+
+# Where the rendered files are put on the machine, and where the container
+# reads them. The left side is the host; the right side is where the
+# entrypoint reads the configuration and the accounts from.
+paths:
+  host_config: /srv/docker/samba/config
+  container_config: /config
+
+volumes: []

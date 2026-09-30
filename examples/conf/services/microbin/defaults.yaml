@@ -1,0 +1,30 @@
+# The user names for HTTP basic auth and for the administrative interface.
+# The passwords are secrets, and are not here.
+basic_auth_username: webadmin
+admin_username: webadmin
+
+# MicroBin variables written straight into .env, keyed by variable name. An
+# instance's `values.env` merges over this key by key, so a machine changing
+# one variable writes that one rather than copying the table.
+#
+# MICROBIN_BIND, MICROBIN_PORT and MICROBIN_PUBLIC_PATH are not here: they are
+# the instance's `bind`, its ports and a port's `published`, and writing them
+# twice would make two truths.
+env:
+  MICROBIN_PRIVATE: true
+  MICROBIN_DEFAULT_PRIVACY: secret
+  MICROBIN_ENCRYPTION_CLIENT_SIDE: true
+  MICROBIN_ENCRYPTION_SERVER_SIDE: true
+  MICROBIN_NO_LISTING: true
+
+  MICROBIN_DEFAULT_EXPIRY: 24hour
+  MICROBIN_MAX_EXPIRY: 1week
+  MICROBIN_ENABLE_BURN_AFTER: true
+
+  MICROBIN_MAX_FILE_SIZE_ENCRYPTED_MB: 64
+  MICROBIN_MAX_FILE_SIZE_UNENCRYPTED_MB: 128
+
+  MICROBIN_DATA_DIR: data_dir
+  MICROBIN_DISABLE_TELEMETRY: true
+  MICROBIN_LIST_SERVER: false
+  MICROBIN_DISABLE_UPDATE_CHECKING: true

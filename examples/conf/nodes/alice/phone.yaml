@@ -1,0 +1,10 @@
+# The same person's phone. It names no credential, so it carries `default` —
+# the credential someone has without choosing one.
+#
+# `export` narrows what is written for this device to one of the forms the
+# services it reaches offer. This phone runs a client that reads a share URI,
+# so it takes the link and not the JSON configuration.
+
+id: phone
+
+export: link

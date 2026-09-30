@@ -1,0 +1,8 @@
+# One way a Hysteria2 credential is handed to a person: a hy2:// share URI.
+#
+# An export renders and nothing else. It has no ports, because nothing
+# listens; no auth, because nothing connects to a file; and no secrets of its
+# own, because what it carries belongs to the service it reaches.
+template: templates/share.txt.tmpl
+defaults: element
+output: share.txt

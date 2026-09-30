@@ -1,0 +1,52 @@
+#!/bin/sh
+# Put the rendered files where the runtime expects them, then start it.
+#
+# Written by dgs for {{ (target).instance }}. Editing it here is editing a
+# file that is replaced by the next render.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+config={{ .paths.host_config }}
+
+# 0700: the account table beside smb.conf holds NT hashes, and knowing one is
+# equivalent to knowing the password.
+mkdir -p "$config"
+chmod 0700 "$config"
+
+for file in smb.conf smbpasswd groups.txt users.txt; do
+    install -m 0600 "$here/$file" "$config/$file"
+done
+
+docker compose -f "$here/compose.yaml" up -d
+{{- $accounts := (instance).values.accounts }}
+{{- $container := (instance).deploy.container_name }}
+
+# [homes] resolves its path when someone connects, and Samba does not create
+# the directory: a person without one is refused as soon as they open it.
+# Create each missing one, owned by that person and private to them.
+#
+# The path comes from the smb.conf the container runs, through testparm,
+# rather than being written here a second time, so the two cannot disagree.
+# An existing directory is left exactly as it is.
+container={{ $container }}
+
+# The entrypoint creates the POSIX accounts before smbd starts; wait for the
+# last one so install -o below has an owner to name.
+tries=0
+people="{{ range $person, $uid := $accounts.uids }}{{ $person }} {{ end }}"
+until docker exec "$container" sh -c "for p in $people; do id \"\$p\" >/dev/null 2>&1 || exit 1; done"; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 30 ] || { echo "accounts never appeared in $container" >&2; exit 1; }
+    sleep 1
+done
+
+home=$(docker exec "$container" testparm -s --section-name=homes --parameter-name=path /config/smb.conf 2>/dev/null)
+case "$home" in
+    */%S) ;;
+    *) echo "[homes] path is ${home:-empty}, not one ending in %S; not creating home directories" >&2; exit 1 ;;
+esac
+for person in $people; do
+    dir=$(printf '%s' "$home" | sed "s|%S|$person|g")
+    docker exec "$container" sh -c \
+        "[ -d '$dir' ] || install -d -o '$person' -g '{{ $accounts.owner.name }}' -m 0700 '$dir'"
+done

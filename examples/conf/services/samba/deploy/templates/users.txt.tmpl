@@ -1,0 +1,19 @@
+# name:password:uid:groups — the POSIX accounts Samba maps onto.
+#
+# The password field is empty, and that is the point: the accounts here exist
+# so the kernel has a uid to own files with, and the passwords are NT hashes
+# in the smbpasswd file beside this one. A deployed file on the file server
+# holds no plaintext credential.
+#
+# One entry per person, never one per credential: two of someone's credentials
+# are two ways into one home directory.
+{{- $accounts := (instance).values.accounts }}
+{{- /*
+  The owner first: the account every shared file is written as, through
+  `force user`. It logs in as nobody and holds no password, but it has to
+  exist — a `force user` naming an account the container does not have
+  refuses every connection to that share.
+*/}}
+{{ $accounts.owner.name }}::{{ $accounts.owner.uid }}:{{ $accounts.owner.name }}
+{{ range $person, $uid := $accounts.uids }}{{ $person }}::{{ $uid }}:{{ $accounts.owner.name }}
+{{ end }}

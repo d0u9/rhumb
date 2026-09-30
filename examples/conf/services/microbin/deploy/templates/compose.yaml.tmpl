@@ -1,0 +1,37 @@
+{{- /*
+  A Compose file for one instance, standing alone: no project, no shared
+  network, no ordering. Each instance renders its own.
+
+  The port mapping is the reason this file is generated at all. `mapping`
+  gives the addresses the container runtime publishes this port at and the
+  number, both derived — the addresses from the edges into the port, the
+  number from the same `ports` field MICROBIN_PORT is rendered from, so the
+  two cannot disagree.
+
+  One published port per address: a machine on two networks serves both, and
+  a port reached from its own node and from another needs loopback beside the
+  address that other machine dials. This one is entered only by the Caddy
+  beside it, so the list is loopback alone.
+
+  No credential is here. `env_file` names the configuration rendered beside
+  this file, and every password stays in it, so rotating one touches one
+  file.
+*/ -}}
+{{- $web := mapping "web" -}}
+services:
+  {{ (instance).id }}:
+    image: {{ $.image }}
+    container_name: {{ (instance).id }}
+    restart: {{ $.restart }}
+    env_file:
+      - server.env
+    ports:
+{{- range $address := $web.Addresses }}
+      - "{{ $address }}:{{ $web.Number }}:{{ $web.Number }}"
+{{- end }}
+{{- with $.volumes }}
+    volumes:
+{{- range . }}
+      - {{ . }}
+{{- end }}
+{{- end }}

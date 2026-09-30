@@ -1,0 +1,17 @@
+#!/bin/sh
+# Rendered by dgs for {{ (instance).id }}. Run on the current host.
+set -eu
+
+[ "$#" -eq 0 ] || { echo "Usage: ./uninstall.sh" >&2; exit 2; }
+dest={{ $.dir }}/{{ (instance).id }}
+container={{ (instance).id }}
+docker info >/dev/null 2>&1 || { echo "cannot reach Docker; $container may still be running" >&2; exit 1; }
+if [ -f "$dest/compose.yaml" ]; then
+    (cd "$dest" && {{ $.compose }} down --remove-orphans)
+fi
+if docker container inspect "$container" >/dev/null 2>&1; then
+    docker rm -f "$container"
+fi
+rm -f -- "$dest/compose.yaml" "$dest/server.env" "$dest/install.sh" "$dest/uninstall.sh"
+echo "MicroBin stopped. Preserve and inspect $dest for data and backups."
+echo "Verify: docker container inspect $container must report no such container."

@@ -1,0 +1,63 @@
+# People. Not Linux accounts, and not passwords.
+#
+#   access        the routes this person may use, by name
+#   credentials   their credentials, each against a note saying where it is
+#                 used — free text dgs never reads. Omitted, they have one
+#                 called `default`. A device names which one it uses, and two
+#                 devices naming the same one share a password.
+#   username      the account name services see. Defaults to the key here.
+#   devices       `none` when this inventory deliberately holds no node file
+#                 for them, which tells that apart from device files put in
+#                 the wrong place.
+#   export        which form their files render as, for the credentials no
+#                 device of theirs carries.
+#
+# A credential no device names may also list `reaches`: networks, beyond the
+# universal one, where the person uses it from a machine not modeled here.
+#
+# A change here is the audit: one diff says who gained or lost access.
+
+users:
+  alice:
+    access: [sea-01-ss, sea-01-hy2, files]
+    credentials:
+      default:
+        note: The phone, and anything else without a credential of its own.
+      # The laptop leaves the house, so it keeps a credential of its own and
+      # only the Shadowsocks line: losing it revokes this one value, and
+      # neither the phone nor the Hysteria2 line is touched.
+      laptop:
+        note: alice's laptop, so it can be cut off on its own
+        # The file server admits one credential per person, so the shares are
+        # on the default one and not on this.
+        access: [sea-01-ss]
+
+  # A service instance dials as this principal. It is not a device, and the
+  # access here remains the grant: `principal` on the instance grants nothing.
+  repeater:
+    devices: none
+    access: [hel-local-sea-01-ss]
+
+  # Two people this inventory deliberately holds no node file for. The
+  # credential belongs to the person; what is handed over is a share URI,
+  # because which client they run is not knowable here.
+  bob:
+    devices: none
+    export: link
+    access: [sea-01-ss, sea-01-hy2, hel-sea-01-ss, hel-sea-01-hy2]
+
+  guest:
+    devices: none
+    export: link
+    access: [sea-01-ss]
+
+  # Someone in the house who types the file server's address into a laptop
+  # this inventory does not model. Nothing renders for them; `reaches` says the share is
+  # used from the home network, which is the only place the NAS answers.
+  carol:
+    devices: none
+    access: [files]
+    credentials:
+      default:
+        note: carol's own laptop, on the house network
+        reaches: [home]

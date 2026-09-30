@@ -1,0 +1,26 @@
+# What starts Samba, beside the three files that say how it behaves.
+#
+# No credential reaches any of these. The account table is rendered by the
+# service itself and sits in the directory this compose file binds; a
+# deployment names that file rather than repeating what is in it.
+#
+# The POSIX accounts are here rather than derived from grants on purpose:
+# which accounts a machine has, and which numbers they carry, is that
+# machine's fact. What is derived is who may log in, which is the account
+# table's business.
+defaults: document
+files:
+  - template: templates/compose.yaml.tmpl
+    output: compose.yaml
+  # The container starts empty of accounts. These two say which POSIX users
+  # and which group its entrypoint creates before smbd starts.
+  - template: templates/groups.txt.tmpl
+    output: groups.txt
+  - template: templates/users.txt.tmpl
+    output: users.txt
+  # .sh is the declaration: an output named this way is written with the
+  # execute bit, and nothing says so a second time.
+  - template: templates/install.sh.tmpl
+    output: install.sh
+  - template: templates/uninstall.sh.tmpl
+    output: uninstall.sh

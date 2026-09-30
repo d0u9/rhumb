@@ -1,0 +1,14 @@
+# One process, one port per line it relays. Which port a connection arrives
+# on is what decides where it goes, so the ports are the routes' own.
+id: fwd-hel01
+service: realm
+ports:
+  # `published` is the name clients dial. The account they use is not
+  # this machine's, but the address they write down is.
+  ss:
+    port: 38250
+    published: relay.example.net
+  hy2:
+    port: 443
+    published: relay.example.net
+    protocol: udp

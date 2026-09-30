@@ -1,0 +1,9 @@
+# A loopback SOCKS listener authenticates nobody. It does need the upstream
+# port's shared PSK; `principal` on the instance selects whose credential is
+# joined after it.
+auth: none
+upstream:
+  shared: {}
+template: templates/config.json.tmpl
+defaults: element
+output: config.json

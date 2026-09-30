@@ -1,0 +1,21 @@
+# A relay: it moves the bytes of one port to the hop that follows it, reads
+# none of them, and terminates nothing.
+#
+# `forwards` is what says so, and it decides where a client's credential comes
+# from: whoever dials this machine authenticates against the hop behind it, so
+# the route is written out as the service that ends it. This one holds no
+# account table and no secret of its own. Written together with
+# `auth: per-principal`, or with `self`, the manifest does not load.
+auth: none
+forwards: true
+
+# One process, one port per next hop. `downstreams: many` because the routes
+# through it do not share one, and `dispatch: port` because what tells them
+# apart is which port they arrived on — a relay has no names behind it, the
+# way a reverse proxy does.
+downstreams: many
+dispatch: port
+
+template: templates/config.toml.tmpl
+defaults: document
+output: config.toml

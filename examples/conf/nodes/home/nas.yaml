@@ -1,0 +1,61 @@
+# A file server on the house network.
+#
+# It has an address on `home` and none on `internet`: nothing outside the
+# house dials it, and writing an address it does not answer on would describe
+# a listener that does not exist.
+
+id: nas
+
+networks:
+  home: 10.0.0.10
+
+instances:
+
+  # Samba. The service that writes more than one file: smb.conf, the account
+  # table beside it, and the map from account names to POSIX accounts.
+  - id: samba-nas
+    service: samba
+    runtime: docker
+    # 0.0.0.0 inside the container is the container's own interface, not an
+    # open listener: what reaches it is the port mapping in the rendered
+    # compose file.
+    bind: "0.0.0.0"
+    ports:
+      smb: 445
+    values:
+      # The machine's own accounts: the group Samba writes as, and one uid
+      # per person. A uid is keyed by the person, never by the credential, so
+      # two of alice's credentials are two ways into one home directory.
+      #
+      # They are here and nowhere else. smb.conf reads them through this
+      # instance's values, and the users.txt the container creates accounts
+      # from reads the same lines, so the file server cannot end up with an
+      # account table naming a uid no account has.
+      accounts:
+        # The account shared files are written as, through `force user` and
+        # `force group`: a user and a group of the same name. Both have to exist in
+        # the container, so both are created from here.
+        owner:
+          name: svcuser
+          uid: 1000
+          gid: 1000
+        uids:
+          alice: 3001
+          carol: 3002
+      # `users` names people, never accounts: which of their credentials open
+      # this share follows from their access, and is not restated here.
+      shares:
+        vault:
+          comment: Vault storage
+          path: /mnt/vault/00-vault
+          users: [alice, carol]
+          settings:
+            browseable: "yes"
+            read only: "no"
+            create mask: "0664"
+            directory mask: "0775"
+    deploy:
+      container_name: ser.samba
+      volumes:
+        - source: /mnt/vault
+          target: /mnt/vault

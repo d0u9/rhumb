@@ -1,0 +1,9 @@
+{
+  "conf": {
+    "root": "~/confgen",
+    "secrets": "~/confgen-secrets",
+    "export": {
+      "dir": "~/Exports"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{{- /*
+  An sslocal config.json: where to listen locally, and the one server this
+  person reaches through this hop. The password is the same sequence the
+  share URI carries — the port's shared secrets first, then the person's own.
+  The local listener is the defaults' unless this file's own values — a
+  device profile's, or an instance pinning it — say otherwise.
+*/ -}}
+{{- $base := index (defaults).servers 0 -}}
+{{- $server := merge (dict
+      "server" (or (upstream).published (upstream).address)
+      "server_port" (upstream).port
+      "password" (printf "%s:%s" (join ":" (upstream).shared) (upstream).secret)) $base -}}
+{{- $values := dict -}}
+{{- if has (instance) "values" -}}
+  {{- $values = (instance).values -}}
+{{- end -}}
+{{- $local := merge $values (dict
+      "local_address" (defaults).local_address
+      "local_port" (defaults).local_port) -}}
+{{ toJSON (dict
+     "local_address" $local.local_address
+     "local_port" $local.local_port
+     "servers" (slice $server)) }}

@@ -1,0 +1,26 @@
+# TLS certificates. Hysteria2 runs over QUIC and a client verifies a real
+# certificate by default, so this points at the pair an ACME client leaves on
+# the server rather than at a self-signed one.
+tls_cert: /etc/hysteria/tls/fullchain.pem
+tls_key: /etc/hysteria/tls/privkey.pem
+
+# Bandwidth: let the server's own limits decide, not the numbers a client
+# reports.
+ignore_client_bandwidth: false
+# The built-in speed test endpoint. Leaving it on gives anyone who
+# authenticates a way to burn traffic.
+speed_test: false
+
+# Masquerade: a request that does not authenticate is reverse-proxied to this
+# site unchanged, so this is what an active prober sees. Every machine names
+# its own in the instance's `values`.
+#
+# rewriteHost is on in the template: the proxied request's Host header becomes
+# this URL's hostname. When the target is a reverse proxy that picks a site by
+# Host — this inventory's own Caddy is one — the name has to be one that proxy
+# serves, or a prober gets its default site instead of the masquerade.
+#
+# listenHTTP and listenHTTPS are deliberately not set: they would make
+# hysteria hold TCP 80 and 443, and on a machine with a web server those two
+# numbers belong to it. Hysteria answers on QUIC/UDP alone.
+masquerade_url: https://example.org/

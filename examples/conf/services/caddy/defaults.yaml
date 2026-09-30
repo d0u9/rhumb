@@ -1,0 +1,20 @@
+# The email an ACME account is registered under.
+acme_email: admin@example.com
+
+# Headers every site gets. A site adding one writes it in the instance's
+# values; this is the floor.
+security_headers:
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+
+# The root an HTTP request matching no site name falls back to. Every machine
+# names its own in the instance's values.
+default_root: /srv/www/placeholder/current
+
+# Per-route options for the services behind this proxy, by route name. An
+# instance merges its own over these; the address, the port and the site name
+# are not here, because dgs resolves those from the routes.
+sites: {}
+
+# Static sites: each entry a set of names sharing one root.
+static: []

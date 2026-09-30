@@ -1,0 +1,28 @@
+# MicroBin: reached from a browser, so there is no client configuration to
+# render and no exports/ directory.
+#
+# auth: none — its passwords are not one per person. They belong to this
+# instance, and whoever holds one is whoever holds it.
+secret:
+  kind: printable
+  bytes: 24
+
+auth: none
+
+# Every one of this service's own secrets an instance may hold. An instance
+# narrows with its own `self`: one with no administrative interface should not
+# be handed the two passwords guarding one, or `secret sync` would generate
+# values the template never reads and nothing would report it, because the
+# service's list says they are legitimate.
+#
+# The upload password is the one handed to a person, through the port's `self`
+# list. The other two guard the site and the administrative interface, and go
+# to no one.
+self:
+  auth_password: {}
+  admin_password: {}
+  upload_password: {}
+
+template: templates/server.env.tmpl
+defaults: document
+output: server.env

@@ -1,0 +1,26 @@
+# Shadowsocks, server side (`ssserver`). `sslocal` would be another service:
+# one program, one service.
+
+# Shadowsocks 2022 wants base64 of exactly the key size, not an arbitrary
+# password, so the shape is declared rather than left to the default.
+secret:
+  kind: base64
+  bytes: 32
+
+auth: per-principal
+rotation: disruptive
+
+# The server's own pre-shared key, one per port: the two account tables do not
+# share it, so revoking a relay does not touch the users. `set: true` makes
+# the name a family of values whose keys the instance declares — here `users`
+# and `relays`, written on the ports that hand them out.
+self:
+  psk:
+    set: true
+
+template: templates/config.json.tmpl
+# element: the defaults are one entry of the `servers` list, and apply to
+# every entry of it. Merging at document level would put a one-entry list
+# against the instance's list instead of into each of its entries.
+defaults: element
+output: config.json

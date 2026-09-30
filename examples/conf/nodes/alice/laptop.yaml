@@ -1,0 +1,43 @@
+# A device.
+#
+# A device says only where it can dial out, never how others find it: nothing
+# connects to a laptop. It dials on the universal network (internet), which is
+# implicit, so it does not even write `reaches`.
+#
+# `credential` names which of its owner's credentials it uses. Unwritten means
+# `default`, and two devices naming the same one share a password.
+
+id: laptop
+
+# This laptop keeps a credential of its own rather than sharing the default:
+# losing it revokes this one value, and the other devices are untouched.
+credential: laptop
+
+# `profiles` are the uses this device is put to. Each one is written out as
+# its own file — `laptop-sea-01-ss-ssserver-json-singbox` beside
+# `...-json-browser` — so two programs on one machine each get a
+# configuration of their own. They are files, not accounts: every profile
+# carries this laptop's one credential, and the server still holds one
+# password for it.
+#
+#   export   which way this profile is written out, as a device's `export`
+#            would be. A program reading a different format gets an export
+#            of its own under services/<service>/exports/, with its own
+#            template and defaults. Unwritten, every way the services offer.
+#   values   what differs for this use, over the export's defaults.yaml —
+#            here only the local listener. An instance written below with a
+#            profile's file name wins over them key by key.
+#   access   the routes this profile covers, among those the laptop's
+#            credential opens. Unwritten, all of them.
+#
+# A device with profiles does not also write `export`: each profile says its
+# own. Hand over one with `dgs conf export node:laptop profile:singbox`.
+profiles:
+  singbox:
+    export: json
+    values:
+      local_port: 2080
+  browser:
+    export: json
+    values:
+      local_port: 1080

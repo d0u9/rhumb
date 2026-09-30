@@ -1,0 +1,30 @@
+{{- /*
+  What puts the rendered files in place and starts the instance. Without it,
+  the export is two files and a paragraph of instructions someone follows by
+  hand on every machine: where the configuration goes, which order the two
+  are copied in, and what starts the runtime afterwards.
+
+  It copies the whole directory it is in rather than naming the files, so
+  adding a file to this deployment does not mean editing this script, and no
+  output name is written twice.
+
+  `dir` is an ordinary deploy value: the path is a property of the machine,
+  not something dgs derives, so defaults.yaml carries the base and an
+  instance overrides it. dgs still deploys nothing — this file is rendered
+  and written, and running it is the operator's own step on their own
+  transport.
+*/ -}}
+#!/bin/sh
+# Rendered by dgs for {{ (instance).id }}. Run it on the machine that hosts
+# this instance.
+set -eu
+
+src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+dest={{ $.dir }}/{{ (instance).id }}
+
+mkdir -p "$dest"
+cp -- "$src"/* "$dest"/
+rm -f -- "$dest/$(basename -- "$0")"
+
+cd "$dest"
+{{ $.compose }} up -d

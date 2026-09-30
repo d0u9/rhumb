@@ -1,0 +1,46 @@
+# Samba. A file server on the house network, and the case a service writing
+# more than one file exists for.
+#
+# Samba does not keep passwords in smb.conf. It keeps NT hashes in an account
+# table beside it. Those are two halves of one configuration, not two
+# services: they are read by one program, they describe one set of accounts,
+# and splitting them would put one truth behind two manifests that could
+# disagree.
+#
+# So the service declares `files` instead of `template` and `output`. Both
+# render from this directory's defaults.yaml and one render context, so the
+# share that names an account and the table that holds it are written from the
+# same facts in one pass.
+secret:
+  kind: printable
+  bytes: 24
+
+# per-principal: one credential per principal reaching the port, and an
+# account table rendered from them. That is what makes the smbpasswd file
+# derived rather than typed.
+auth: per-principal
+
+# person: an account is named after the person, not `<person>-<credential>`.
+# A Samba account is a POSIX user, and the name a client logs in with is the
+# one that owns their files, so a suffix there would be a second name for the
+# same account. What it gives up is a second credential per person on this
+# port: two would be two accounts under one name, which `--check` reports.
+# The secret is still the credential's, under the same path.
+accounts: person
+
+# This template cannot emit two accounts for one principal: smbpasswd is keyed
+# by account name, and a second entry under the same name is the same account
+# written twice. Rotating drops the connection.
+rotation: disruptive
+
+files:
+  # How the program behaves, and which accounts each share admits.
+  - template: templates/smb.conf.tmpl
+    output: smb.conf
+  # The accounts themselves, as NT hashes. The plaintext is in the secret
+  # store, on the machine that hands it to a person; the machine running Samba
+  # holds only what the protocol proves knowledge of.
+  - template: templates/smbpasswd.tmpl
+    output: smbpasswd
+
+defaults: document

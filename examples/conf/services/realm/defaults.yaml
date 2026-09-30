@@ -1,0 +1,5 @@
+# What every relay on every machine shares. UDP is on because the protocols
+# in front of it need it: QUIC is UDP, and Shadowsocks carries UDP too.
+log_level: warn
+use_udp: true
+use_tcp: true

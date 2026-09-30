@@ -1,0 +1,11 @@
+# The other way the same credential is handed over: an sslocal config.json,
+# for a device running the client as a program rather than pasting a URI.
+#
+# Two exports of one service is the case `export` on a device or a user
+# chooses between. Both are rendered, and a selector narrows to the one a
+# hand-over needs.
+template: templates/config.json.tmpl
+defaults: element
+output: config.json
+upstream:
+  shared: {}

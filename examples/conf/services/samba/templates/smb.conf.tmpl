@@ -1,0 +1,50 @@
+{{- /*
+  smb.conf. The [global] section, Samba's own [homes], and one section per
+  named share.
+
+  `valid users` is never authored on a named share: the share names people,
+  and the accounts follow from who holds a grant on this instance's port. A
+  person named by a share who holds no grant is an error rather than a
+  silently empty line — a typo there would otherwise read as "nobody", which
+  is what revoking looks like.
+
+  [homes] is Samba's own: one section per user, resolved when they connect,
+  and `%S` is the name they logged in with — the person's, because this
+  service names accounts by person.
+*/ -}}
+[global]
+{{- range $key, $value := .global }}
+    {{ $key }} = {{ $value }}
+{{- end }}
+
+[homes]
+    comment = Home Directories
+    path = {{ $.homes.root }}/%S
+    valid users = %S
+    force group = {{ $.accounts.owner.name }}
+{{- range $key, $value := merge $.homes.settings $.share_defaults }}
+    {{ $key }} = {{ $value }}
+{{- end }}
+
+{{- range $name, $share := .shares }}
+{{- $admitted := slice }}
+{{- range $g := grantees "smb" }}
+{{- if has $share.users $g.User }}
+{{- range $account := $g.Accounts }}{{ $admitted = append $admitted $account }}{{ end }}
+{{- end }}
+{{- end }}
+{{- range $person := $share.users }}
+{{- $held := slice }}
+{{- range $g := grantees "smb" }}{{ if eq $g.User $person }}{{ $held = append $held $g.User }}{{ end }}{{ end }}
+{{- $_ := required $held (printf "share %s names %s, who holds no grant on this instance's smb port" $name $person) }}
+{{- end }}
+[{{ $name }}]
+    comment = {{ $share.comment }}
+    path = {{ required $share.path (printf "share %s: path" $name) }}
+    valid users = {{ join " " $admitted }}
+    force user = {{ $.accounts.owner.name }}
+    force group = {{ $.accounts.owner.name }}
+{{- range $key, $value := merge $share.settings $.share_defaults }}
+    {{ $key }} = {{ $value }}
+{{- end }}
+{{ end -}}

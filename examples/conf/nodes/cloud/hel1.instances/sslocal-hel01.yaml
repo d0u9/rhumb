@@ -1,0 +1,9 @@
+# A loopback-only SOCKS listener for programs on this machine. It dials
+# San Francisco as the already-authorised `repeater` principal; the node
+# file carries no key material.
+id: sslocal-hel01
+service: sslocal
+principal: repeater
+bind: 127.0.0.1
+ports:
+  socks: 1080

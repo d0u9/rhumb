@@ -1,0 +1,67 @@
+# What every Samba instance shares. An instance's `values` merge over this key
+# by key, so a machine that differs in one setting writes that one setting.
+
+# The [global] section, rendered key by key in the order Samba reads them as
+# names rather than in the order they are written here.
+#
+# There is no `passdb backend`: the rendered account table is in smbpasswd
+# format and is imported into Samba's own passdb when the container starts,
+# so smbd keeps its default backend and never writes to the read-only
+# directory the rendered files are mounted from.
+global:
+  server role: standalone server
+  server min protocol: SMB2_10
+  server max protocol: SMB3
+  map to guest: Never
+  restrict anonymous: 2
+  disable spoolss: "yes"
+  load printers: "no"
+  printing: bsd
+  printcap name: /dev/null
+  logging: stdout
+  log level: 1
+  # Samba advertises DFS by default, so macOS asks for a referral for
+  # \<address> before opening a share. smbd checks that address against its
+  # own interfaces — and in a container those are Docker's, not the address
+  # the client dialled, which reaches it through a port mapping. It answers
+  # "not ours", and Finder gives up with "There was a problem connecting".
+  # Nothing here uses DFS, so it is not advertised.
+  host msdfs: "no"
+
+# One entry of the share list, applied to every share. These are the lines
+# that were copied into every section of a hand-written smb.conf, and copying
+# is what made them drift.
+share_defaults:
+  guest ok: "no"
+  public: "no"
+  veto files: /.apdisk/.DS_Store/.TemporaryItems/.Trashes/desktop.ini/ehthumbs.db/Network Trash Folder/Temporary Items/Thumbs.db/
+  delete veto files: "yes"
+  hide special files: "yes"
+  vfs objects: catia fruit streams_xattr recycle
+  recycle:directory_mode: "0770"
+  recycle:keeptree: "yes"
+  recycle:maxsize: 0
+  recycle:repository: .deleted
+  recycle:versions: "yes"
+
+# `accounts` is deliberately absent. The POSIX accounts Samba maps onto, and
+# the group it writes as, are the machine's own facts, and the deployment that
+# creates them reads the instance rather than this file: a default here would
+# be a second truth that the rendered smb.conf followed and the rendered
+# users.txt did not. Every instance states it.
+
+# Samba's own [homes]: one section resolved per user when they connect. `%S`
+# is the name they logged in with, which is the person's, since this service
+# names accounts by person.
+homes:
+  root: /mnt/vault/11-home
+  settings:
+    browseable: "no"
+    read only: "no"
+    hide unreadable: "yes"
+    create mask: "0640"
+    directory mask: "0750"
+
+# The shares that are not homes. One entry per share; `users` names people,
+# and the accounts follow from who holds a grant.
+shares: {}

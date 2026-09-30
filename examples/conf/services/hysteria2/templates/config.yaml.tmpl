@@ -1,0 +1,34 @@
+{{- /*
+  Hysteria2's config.yaml is one document and one process listens on one
+  port, so defaults.yaml is document-shaped: the instance's `values` merge
+  over the whole document, and the dot is the result — a machine changing its
+  masquerade site writes masquerade_url in the instance's values.
+
+  The port is still the unit an account table belongs to, and here there is
+  exactly one: an instance writing a second port would render two `listen`
+  keys and YAML would reject the duplicate. Two ports means two processes,
+  which means two instances.
+*/ -}}
+{{- range $name, $number := (instance).ports }}
+listen: {{ printf ":%v" $number | toJSON }}
+
+tls:
+  cert: {{ $.tls_cert }}
+  key: {{ $.tls_key }}
+
+ignoreClientBandwidth: {{ $.ignore_client_bandwidth }}
+speedTest: {{ $.speed_test }}
+
+auth:
+  type: userpass
+  userpass:
+    {{- range $p := principals $name }}
+    {{ $p.Name }}: {{ toJSON $p.Secret }}
+    {{- end }}
+
+masquerade:
+  type: proxy
+  proxy:
+    url: {{ $.masquerade_url }}
+    rewriteHost: true
+{{ end -}}

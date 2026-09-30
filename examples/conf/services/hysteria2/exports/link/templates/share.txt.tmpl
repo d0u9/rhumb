@@ -1,0 +1,9 @@
+{{- /*
+  hy2://<account>:<password>@<address>:<port>/
+
+  The account name, the password, the address and the port are the upstream:
+  the hop this file is written for, resolved the same way any other edge is.
+  Hysteria2's credential is the person's own password alone, so this export
+  declares no `upstream` needs beyond it.
+*/ -}}
+hy2://{{ (upstream).account }}:{{ (upstream).secret }}@{{ or (upstream).published (upstream).address }}:{{ (upstream).port }}/#{{ (target).instance }}

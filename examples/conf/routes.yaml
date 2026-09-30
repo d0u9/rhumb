@@ -1,0 +1,48 @@
+# Routes: one chain each, from where traffic enters to where it leaves,
+# written as an ordered list of hops. A hop is `<node>/<instance>:<port>`, and each
+# adjacent pair is one edge whose address dgs works out from the two nodes.
+#
+# A route's name is what a person sees when they pick a line in their client,
+# so keep the machine out of it — a route may enter one server today and its
+# replacement tomorrow.
+#
+# A one-hop route is an ordinary route. Reaching a service directly is not a
+# special form.
+
+routes:
+  # The protocol is in the name because this server offers both, so picking
+  # one is the choice being offered: a network that blocks Shadowsocks still
+  # leaves Hysteria2. A server offering one protocol would not write it.
+  sea-01-ss:
+    hops: [sea1/ss-sea01:users]
+
+  # A program on the relay machine dials the separate `relays` account table.
+  # Its principal in that node file says whose authorised credential it uses.
+  hel-local-sea-01-ss:
+    hops: [hel1/sslocal-hel01:socks, sea1/ss-sea01:relays]
+
+  sea-01-hy2:
+    hops: [sea1/hy2-sea01:users]
+
+  # The same exit, reached through a relay that terminates nothing. Two hops,
+  # and the account is the one at the end: a person holding this line and the
+  # line above uses one password and dials two different addresses. The name
+  # carries both ends, because a person picking it is choosing both.
+  hel-sea-01-ss:
+    hops: [hel1/fwd-hel01:ss, sea1/ss-sea01:users]
+
+  hel-sea-01-hy2:
+    hops: [hel1/fwd-hel01:hy2, sea1/hy2-sea01:users]
+
+  # A service reached from a browser shares the name table with the proxy
+  # lines: a person picks from one list and does not care which kind it is.
+  # Two hops, because a reverse proxy is in front — adding a service behind
+  # that proxy is adding a route like this one, and the proxy's configuration
+  # follows without anyone copying a port number.
+  paste:
+    hops: [sea1/caddy-sea01:https, sea1/microbin-sea01:web]
+
+  # The file server, reached over the house network only. One hop: reaching a
+  # service directly is an ordinary route, not a special form.
+  files:
+    hops: [nas/samba-nas:smb]

@@ -1,0 +1,15 @@
+{{- /*
+  A server-side sslocal process. This is deliberately separate from the
+  ssserver JSON export: this file configures a managed long-running instance,
+  while that export is handed to a person.
+*/ -}}
+{{- $server := merge (dict
+      "server" (or (upstream).published (upstream).address)
+      "server_port" (upstream).port
+      "password" (printf "%s:%s" (join ":" (upstream).shared) (upstream).secret)) (defaults) -}}
+{{ toJSON (dict
+     "locals" (slice (dict
+       "local_address" (instance).bind
+       "local_port" (index (instance).ports "socks")
+       "protocol" "socks"))
+     "servers" (slice $server)) }}

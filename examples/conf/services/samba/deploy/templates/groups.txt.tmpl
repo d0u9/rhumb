@@ -1,0 +1,5 @@
+# name:gid — the group of the account Samba writes shared files as. The
+# container starts with no such group, so its entrypoint creates this one
+# before smbd starts.
+{{- $accounts := (instance).values.accounts }}
+{{ $accounts.owner.name }}:{{ $accounts.owner.gid }}

@@ -1,0 +1,137 @@
+# A server.
+#
+# `networks` says how others find this machine: network name to this node's
+# address on it. It holds a DNS name rather than an address, so changing the
+# address does not touch this file. A machine behind NAT writes `reaches`
+# instead, saying where it can dial out; this one is reachable, so it does not.
+#
+# Instances are written in the node file rather than in a directory of their
+# own: the question asked most often is what runs on this machine, and the
+# answer reads top to bottom.
+
+id: sea1
+
+networks:
+  internet: sea1.example.net
+
+instances:
+
+  # Shadowsocks. One process, two ports, two account tables that know nothing
+  # of each other. A port name says who comes in through it, because the port
+  # is the unit an account table belongs to: whoever holds `users` cannot use
+  # `relays`. Who is on which port follows from `access` in users.yaml and
+  # `hops` in routes.yaml.
+  - id: ss-sea01
+    service: ssserver
+    ports:
+      # `published` is the name clients dial for this port. Exports write it
+      # instead of the node's address, so each service can have its own.
+      users:
+        port: 38250
+        published: ss.example.net
+        self: [psk.users]
+      relays:
+        port: 52146
+        self: [psk.relays]
+    self:
+      psk: [users, relays]
+
+  # Hysteria2. A different program, so a different instance — not a second
+  # port of the one above. One process, one listening port, one account table.
+  - id: hy2-sea01
+    service: hysteria2
+    ports:
+      users:
+        port: 443
+        published: hy2.example.net
+        # QUIC, so UDP. Writing it is what tells this apart from Caddy on
+        # 443/tcp below: two transports are two real listeners, and ports
+        # collide only when address, number and transport all agree.
+        protocol: udp
+    values:
+      # The masquerade target: a request that does not authenticate is
+      # reverse-proxied here unchanged, so this is what an active prober
+      # sees. The service default is a placeholder, and every machine names
+      # its own here.
+      #
+      # It is one of this machine's own Caddy sites, listed under `static`
+      # below: `rewriteHost` rewrites the Host header to this name, and the
+      # proxy in front needs a name it serves or the prober gets the default
+      # site instead of the masquerade.
+      masquerade_url: https://www.example.com/
+
+  # Caddy: the entrance for every site on this machine, with MicroBin behind
+  # it.
+  #
+  # It has one successor per route through it, so the service declares
+  # `downstreams: many`. Only the paste route passes through today — the other
+  # names are static files, with no downstream instance to point at, so they
+  # are in `values` rather than in the routes.
+  - id: caddy-sea01
+    service: caddy
+    ports:
+      http: 80
+      https: 443
+    values:
+      # Per-route options this reverse proxy adds for its downstream. The
+      # address, the port and the site name are not here: dgs resolves those
+      # three from `hops` and the downstream port's `published`.
+      sites:
+        paste:
+          max_body: 128MB
+
+      # Static sites: a set of names sharing one root.
+      static:
+        - names:
+            - www.example.com
+            - example.com
+          root: /srv/www/example/current
+          log: example-sites
+
+      # The root an HTTP request that matched no site name falls back to.
+      default_root: /srv/www/placeholder/current
+
+  # MicroBin. It runs in a container, with the proxy in front. A port's
+  # `published` is the name this service answers to — the proxy matches its
+  # site block on it, and MicroBin writes the same string into
+  # MICROBIN_PUBLIC_PATH, so the name is written once and read twice.
+  #
+  # `runtime` says what delivers the process, and dgs branches on none of it:
+  # it is here so that the `bind` below reads correctly. Inside a container
+  # 0.0.0.0 is the container's own interfaces, not an open listener — what
+  # may actually arrive is the publish address of the port mapping, and this
+  # port is entered only from this machine's Caddy, so that address is
+  # loopback.
+  - id: microbin-sea01
+    service: microbin
+    runtime: docker
+    bind: "0.0.0.0"
+    ports:
+      # A port's `self` is "this key goes to whoever is granted this port",
+      # and a downstream configuration reads it as `(upstream).self`.
+      #
+      # Here it hands out nothing that renders: MicroBin has no exports, is
+      # reached from a browser, and is nobody's upstream. Writing it separates
+      # the three: the upload password is given to people, while the basic
+      # auth and admin passwords are given to no one.
+      web:
+        port: 8080
+        published: paste.example.com
+        self: [upload_password]
+    values:
+      # Two switches for two different things. `auth_enabled` is site-wide
+      # HTTP basic auth, so an anonymous read needs a password too;
+      # `admin_enabled` only opens the administrative interface. This machine
+      # wants the second without the first.
+      auth_enabled: false
+      admin_enabled: true
+      upload_enabled: true
+    # What starting the container needs beyond the model, laid over
+    # services/microbin/deploy/defaults.yaml key by key. dgs reads no key of
+    # it: the deploy template does. The port mapping is not here — it is
+    # derived from `ports` above and from the edges into that port, which is
+    # what the second file is generated for — and neither is any credential,
+    # since the rendered server.env beside it carries those.
+    deploy:
+      volumes:
+        - microbin-data:/var/lib/microbin/data_dir

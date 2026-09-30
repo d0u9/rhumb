@@ -1,0 +1,16 @@
+# Caddy: the machine's web entrance, with services behind it.
+#
+# auth: none — a reverse proxy forwards, it does not authenticate, so a grant
+# on one of its ports implies no credential.
+#
+# downstreams: many — one instance of this service is the entrance for several
+# routes, and each route through it may end somewhere else. It is the only
+# thing that relaxes the rule that a non-terminal hop has the same successor
+# in every route, and it says nothing about credentials: declaring it hands
+# this service nothing.
+auth: none
+downstreams: many
+
+template: templates/Caddyfile.tmpl
+defaults: document
+output: Caddyfile

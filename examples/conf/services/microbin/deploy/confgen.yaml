@@ -1,0 +1,25 @@
+# The second file: what starts MicroBin, beside the file that says how it
+# behaves. The directory is what declares it — a service holding none renders
+# one file — so the service's own confgen.yaml grows no key.
+#
+# It is not an export. An export is derived from a person's access and carries
+# their credential; this belongs to an instance written in a node file, is
+# rendered because that instance's `runtime` is a container runtime, and holds
+# no credential at all.
+#
+# A deployment writes more than the file its runtime reads. The compose file
+# says what to start; the script beside it puts the rendered configuration
+# where the runtime expects it and then starts it, which is the step that was
+# otherwise typed out by hand on every machine. Both render from one view and
+# one defaults.yaml, so the two cannot disagree.
+#
+# An output ending in .sh is written with the execute bit. Nothing declares
+# that: the name is the declaration.
+defaults: document
+files:
+  - template: templates/compose.yaml.tmpl
+    output: compose.yaml
+  - template: templates/install.sh.tmpl
+    output: install.sh
+  - template: templates/uninstall.sh.tmpl
+    output: uninstall.sh

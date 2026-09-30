@@ -1,0 +1,19 @@
+{{- /*
+  One endpoint per route through this machine: `listen` is the port that route
+  arrived on, `remote` is the hop that follows it, which dgs resolved from the
+  route. Replacing the machine at the far end changes that route's hops and
+  nothing here.
+*/ -}}
+[log]
+level = {{ toJSON $.log_level }}
+
+[network]
+use_udp = {{ $.use_udp }}
+use_tcp = {{ $.use_tcp }}
+
+{{ range (downstreams) -}}
+# {{ .Route }}
+[[endpoints]]
+listen = {{ printf "%s:%v" (or (instance).bind "0.0.0.0") .EntryNumber | toJSON }}
+remote = {{ printf "%s:%v" .Address .Number | toJSON }}
+{{ end -}}

@@ -1,0 +1,24 @@
+# A relay, and a client of its own.
+#
+# The relay terminates nothing: bytes arriving
+# on its port are handed to the server in the other city, unchanged and unread.
+# It holds no account table — the people who dial it authenticate against that
+# server, and their share links carry this machine's name with that server's
+# password.
+#
+# The other instance is for this machine itself: a Shadowsocks client on loopback, so
+# that programs here leave through the same server without each of them being
+# a Shadowsocks client. That one does terminate a connection and does carry a
+# credential, which is why it names a principal. The two are not variants of
+# one thing — the relay serves whoever dials in, this serves the machine.
+#
+# What puts traffic on the relay's port, and any firewall in front of it, is
+# the operator's: dgs renders the configuration and stops there.
+
+id: hel1
+
+networks:
+  internet: hel1.example.net
+
+instances:
+  directory: hel1.instances

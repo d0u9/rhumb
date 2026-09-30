@@ -1,0 +1,9 @@
+{{- /*
+  Samba's account table. One line per credential granted on the smb port,
+  holding the NT hash of that credential and never the credential.
+
+  The name is the person's and the uid is their POSIX account's: the two
+  name one account, which is what smbd requires of an entry.
+*/ -}}
+{{ range $p := principals "smb" }}{{ smbpasswd $p.Name (required (index $.accounts.uids $p.User) (printf "accounts.uids: %s" $p.User)) $p.Secret }}
+{{ end }}

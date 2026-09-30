@@ -1,0 +1,17 @@
+# The networks nodes belong to, most preferred first. When two nodes share
+# more than one, the address comes from the first of these they both reach.
+#
+# `universal` names the one every node reaches without saying so. Leave it
+# out and nothing is implicit: every node then states what it reaches.
+#
+# Neither name is known to dgs. These are this inventory's own.
+
+# `home` comes first: a device on the house network reaches the file server
+# over it rather than going out and back.
+networks:
+  - name: home
+    subnet: 10.0.0.0/8
+    gateway: 10.0.0.1
+  - name: internet
+
+universal: internet

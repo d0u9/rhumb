@@ -1,0 +1,29 @@
+{{- /*
+  shadowsocks-rust reads one JSON document holding a `servers` list: one
+  entry per listening port, each with its own account table.
+
+  defaults.yaml is element-shaped, so the template does the merge itself —
+  one baseline entry against each port — and the dot is the instance
+  unmerged. See docs/apps/conf/export.md#two-kinds-of-defaults.
+
+  Shadowsocks 2022 joins two values into the password a client sends: the
+  server's own PSK for that port, and the user's. The server writes its PSK
+  here; the client-side export joins them in the order the port writes them.
+*/ -}}
+{{- $base := index (defaults).servers 0 -}}
+{{- $bind := "::" -}}
+{{- with (instance).bind }}{{ $bind = . }}{{ end -}}
+{{- $entries := slice -}}
+{{- range $name, $port := (instance).ports -}}
+  {{- $accounts := slice -}}
+  {{- range $p := principals $name -}}
+    {{- $accounts = append $accounts (dict "name" $p.Name "password" $p.Secret) -}}
+  {{- end -}}
+  {{- $entry := merge (dict
+        "server" $bind
+        "server_port" $port
+        "password" (secret "psk" $name)
+        "users" $accounts) $base -}}
+  {{- $entries = append $entries $entry -}}
+{{- end -}}
+{{ toJSON (dict "servers" $entries) }}

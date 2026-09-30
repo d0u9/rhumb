@@ -1,0 +1,31 @@
+{{- $deploy := (instance).deploy -}}
+services:
+  {{ (instance).id }}:
+    image: {{ .image }}
+    container_name: {{ .container_name }}
+    restart: {{ .restart }}
+    environment:
+      CONFIG_FILE: {{ .paths.container_config }}/smb.conf
+      GROUP_FILE: {{ .paths.container_config }}/groups.txt
+      USER_FILE: {{ .paths.container_config }}/users.txt
+      PASSDB_FILE: {{ .paths.container_config }}/smbpasswd
+    ports:
+{{- $m := mapping "smb" }}
+{{- range $address := $m.Addresses }}
+      - "{{ $address }}:{{ $m.Number }}:{{ $m.Number }}/tcp"
+{{- end }}
+    volumes:
+      - type: bind
+        source: {{ .paths.host_config }}
+        target: {{ .paths.container_config }}
+        read_only: true
+{{- range $v := .volumes }}
+      - type: bind
+        source: {{ $v.source }}
+        target: {{ $v.target }}
+{{- with $v.propagation }}
+        bind:
+          propagation: {{ . }}
+{{- end }}
+{{- end }}
+{{- if $deploy }}{{ end }}

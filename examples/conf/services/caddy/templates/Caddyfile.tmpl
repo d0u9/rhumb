@@ -1,0 +1,63 @@
+{{- /*
+  One site block per downstream, plus the static sites and the fallback.
+
+  The downstreams datasource is what `downstreams: many` earns: one entry per
+  route through this instance, each already resolved — the site name is the
+  downstream port's `published`, and the address and port are the far end,
+  chosen loopback when the two ends share a node. None of the three is
+  written in a node file, so moving a service to another machine changes the
+  route and not this template's output by hand.
+
+  `sites` in the instance's values carries only what this proxy adds per
+  route, keyed by route name.
+*/ -}}
+{
+	email {{ (defaults).acme_email }}
+}
+
+{{ range $d := downstreams -}}
+{{- $opts := index $.sites $d.Route }}
+{{ $d.Published }} {
+	# route {{ $d.Route }} -> {{ $d.Instance }}:{{ $d.Port }}
+	reverse_proxy {{ $d.Address }}:{{ $d.Number }}
+{{- with $opts.max_body }}
+	request_body {
+		max_size {{ . }}
+	}
+{{- end }}
+	header {
+		{{- range $name, $value := $.security_headers }}
+		{{ $name }} {{ $value }}
+		{{- end }}
+		-Server
+	}
+}
+{{ end -}}
+
+{{- range $s := $.static }}
+{{ join ", " $s.names }} {
+	root * {{ $s.root }}
+	file_server
+{{- with $s.log }}
+	log {
+		output file /var/log/caddy/{{ . }}.log
+	}
+{{- end }}
+	header {
+		{{- range $name, $value := $.security_headers }}
+		{{ $name }} {{ $value }}
+		{{- end }}
+		-Server
+	}
+}
+{{ end }}
+:80, :443 {
+	root * {{ $.default_root }}
+	file_server
+	header {
+		{{- range $name, $value := $.security_headers }}
+		{{ $name }} {{ $value }}
+		{{- end }}
+		-Server
+	}
+}

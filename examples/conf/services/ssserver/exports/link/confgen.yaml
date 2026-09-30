@@ -1,0 +1,13 @@
+# A ss:// share URI, for a client that reads one.
+#
+# Shadowsocks 2022's password is the server's PSK for the port and the
+# person's own, joined — so this export declares `shared`, and is handed the
+# secrets that port gives everything granted on it, in the order the port
+# writes them. A share URI without them is as unusable as a client
+# configuration without them, which is why the declaration is here and not
+# only on a client service.
+template: templates/share.txt.tmpl
+defaults: element
+output: share.txt
+upstream:
+  shared: {}

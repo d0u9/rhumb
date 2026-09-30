@@ -1,0 +1,20 @@
+#!/bin/sh
+# Rendered by dgs for {{ (instance).id }}. Run on the current host.
+set -eu
+
+[ "$#" -eq 0 ] || { echo "Usage: ./uninstall.sh" >&2; exit 2; }
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+config={{ .paths.host_config }}
+container={{ (instance).deploy.container_name }}
+docker info >/dev/null 2>&1 || { echo "cannot reach Docker; $container may still be running" >&2; exit 1; }
+if [ -f "$here/compose.yaml" ]; then
+    docker compose -f "$here/compose.yaml" down --remove-orphans
+fi
+if docker container inspect "$container" >/dev/null 2>&1; then
+    docker rm -f "$container"
+fi
+for file in smb.conf smbpasswd groups.txt users.txt; do
+    rm -f -- "$config/$file"
+done
+echo "Samba stopped. Preserve its home directories and external mounts."
+echo "Verify: docker container inspect $container must report no such container."

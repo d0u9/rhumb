@@ -1,0 +1,11 @@
+{{- /*
+  ss://base64(<method>:<psk>:<password>)@<address>:<port>
+
+  The password Shadowsocks 2022 sends is a sequence: the server's PSK for the
+  port first, then the person's own. A different order authenticates nothing,
+  so `shared` arrives in the order the port writes it and is joined as it
+  came.
+*/ -}}
+{{- $method := (index (defaults).servers 0).method -}}
+{{- $userinfo := printf "%s:%s:%s" $method (join ":" (upstream).shared) (upstream).secret -}}
+ss://{{ b64 $userinfo }}@{{ or (upstream).published (upstream).address }}:{{ (upstream).port }}#{{ (target).instance }}
