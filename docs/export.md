@@ -794,9 +794,13 @@ or an absolute machine path — and `mode`. It is everything `rhumb deploy`
 needs, and all it reads.
 
 A host instance's bundle picks its release and its service manager by
-`platform`: `darwin` registers a LaunchAgent, `linux` a systemd system service
-that runs as the owner of the bundle's directory, with `var/` as its working
-directory. `--platform` overrides it, and a node that writes none gets the
+`platform`: `darwin` registers a LaunchAgent where the bundle is, `linux` a
+systemd system service. A Linux `ctl install` first copies the bundle into
+the instance's `deploy.dir`, `/srv/rhumb/<service>` by default, beside
+`/srv/docker/<service>`: `ctl`, `bin/`, `conf/` and `manifest.yaml` are
+replaced and `var/` is kept, so the unpacked bundle may be deleted after. The
+unit runs as the owner of the unpacked bundle, with the install dir's `var/` as
+its working directory. `--platform` overrides it, and a node that writes none gets the
 building machine's. A service's deploy definition may name `env_files`,
 rendered files handed to the service manager as the program's environment, so
 no secret is written into the unit.
@@ -807,7 +811,7 @@ under `capabilities`, such as `CAP_NET_BIND_SERVICE` for a server on 80 and
 the bundle's owner with that one power and no other. A launchd bundle refuses
 a definition that names any. The unit also points the XDG data, config, state
 and cache directories into `var/`, so what a program keeps there, such as
-Caddy's certificates, stays with the bundle across rebuilds.
+Caddy's certificates, stays in the install dir across reinstalls.
 
 A service's deploy definition names where its program comes from under
 `binary`, with exactly one of:

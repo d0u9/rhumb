@@ -87,7 +87,7 @@ files:
 		t.Fatal(err)
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
-	for _, want := range []string{"systemctl", `set -- "$DIR/conf"'/server.env'`, "LABEL=rhumb.sea.microbin-01\n"} {
+	for _, want := range []string{"systemctl", `set -- "$DIR/conf"'/server.env'`, "LABEL=rhumb.sea.microbin-01\n", "DIR='/srv/rhumb/microbin'\n", "copy_in;"} {
 		if !strings.Contains(string(ctl), want) {
 			t.Errorf("ctl lacks %q:\n%s", want, ctl)
 		}

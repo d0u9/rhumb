@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 
@@ -24,13 +25,15 @@ const ManifestFile = "manifest.yaml"
 const ManifestSchema = 1
 
 type DeployManifest struct {
-	Schema   int                        `yaml:"schema"`
-	Node     string                     `yaml:"node"`
-	Instance string                     `yaml:"instance"`
-	Service  string                     `yaml:"service"`
-	Runtime  string                     `yaml:"runtime"`
-	Platform string                     `yaml:"platform,omitempty"`
-	Root     string                     `yaml:"root,omitempty"`
+	Schema   int    `yaml:"schema"`
+	Node     string `yaml:"node"`
+	Instance string `yaml:"instance"`
+	Service  string `yaml:"service"`
+	Runtime  string `yaml:"runtime"`
+	Platform string `yaml:"platform,omitempty"`
+	Root     string `yaml:"root,omitempty"`
+	// Dir is where a host instance is installed on the machine.
+	Dir      string                     `yaml:"dir,omitempty"`
 	Files    []manifestFile             `yaml:"files"`
 	Ports    []manifestPort             `yaml:"ports,omitempty"`
 	Networks []manifestNetwork          `yaml:"networks,omitempty"`
@@ -169,6 +172,17 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		if len(values) > 0 {
 			man.Deploy = values
 		}
+	}
+
+	if man.Runtime == inventory.RuntimeHost {
+		dir, _ := inst.Deploy["dir"].(string)
+		if dir == "" {
+			dir = path.Join(DefaultHostRoot, t.Service)
+		}
+		if !path.IsAbs(dir) {
+			return nil, fmt.Errorf("%s: deploy dir %q is not absolute", instance, dir)
+		}
+		man.Dir = dir
 	}
 
 	if docker, ok := m.Data.Dockers[t.Service]; ok && inst.Containerised() {

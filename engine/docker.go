@@ -18,6 +18,11 @@ import (
 // names no `dir`: one directory per service under it.
 const DefaultDockerRoot = "/srv/docker"
 
+// DefaultHostRoot is where a host instance of a service is installed on a
+// Linux machine when its `deploy` names no dir: <root>/<service>, beside
+// DefaultDockerRoot.
+const DefaultHostRoot = "/srv/rhumb"
+
 // manifestContainer is how a containerised instance is started, resolved
 // from its service's docker.yaml and its own `deploy`: everything the
 // deployment tool needs to write the compose file and install the files,

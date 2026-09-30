@@ -33,7 +33,9 @@ type Manifest struct {
 	Runtime  string `yaml:"runtime"`
 	// Platform is the machine's GOOS/GOARCH when its node says.
 	Platform string `yaml:"platform"`
-	Files    []struct {
+	// Dir is where ctl install puts a Linux host bundle.
+	Dir   string `yaml:"dir"`
+	Files []struct {
 		Path       string `yaml:"path"`
 		Executable bool   `yaml:"executable"`
 		Place      string `yaml:"place"`
