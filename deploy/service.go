@@ -30,6 +30,10 @@ type Service struct {
 	// so a secret in one never appears in the unit or plist.
 	EnvFiles []string `yaml:"env_files"`
 	Expose   []string `yaml:"expose"`
+	// Capabilities are the Linux capabilities the program is given beyond
+	// an ordinary user's, such as CAP_NET_BIND_SERVICE to listen below
+	// 1024. It gets no other: a unit without any keeps none.
+	Capabilities []string `yaml:"capabilities"`
 }
 
 // Sources are the ways a service's binary may reach a machine. A
@@ -106,6 +110,11 @@ func LoadService(name, dir string) (Service, error) {
 	}
 	if s.Binary.Name == "" || len(s.Command) == 0 {
 		return s, fmt.Errorf("service %q: binary.name and command are required", name)
+	}
+	for _, c := range s.Capabilities {
+		if !strings.HasPrefix(c, "CAP_") || strings.ContainsAny(c, " \t\n") {
+			return s, fmt.Errorf("service %q: capability %q is not a CAP_ name", name, c)
+		}
 	}
 	if names := s.Binary.Names(); len(names) != 1 {
 		return s, fmt.Errorf("service %q: binary writes %d of release, apt and path; it takes one", name, len(names))

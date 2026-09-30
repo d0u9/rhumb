@@ -1,0 +1,21 @@
+# Caddy, the web server and reverse proxy. The export renders the Caddyfile
+# and caddy.env, which holds a DNS provider's token when certificates are
+# taken by DNS-01 and is empty otherwise. Certificates are kept under
+# XDG_DATA_HOME, which is the bundle's var/share.
+binary:
+  name: caddy
+  # The newest GitHub release, without plugins: enough for HTTP-01. DNS-01
+  # needs a build carrying the provider's module, bundled with --bin.
+  release:
+    github: caddyserver/caddy
+    version: latest
+    url: caddy_{version}_{target}.tar.gz
+    targets:
+      darwin/arm64: mac_arm64
+      darwin/amd64: mac_amd64
+      linux/arm64: linux_arm64
+      linux/amd64: linux_amd64
+command: ["{bin}/caddy", "run", "--config", "{conf}/Caddyfile", "--adapter", "caddyfile"]
+env_files: [caddy.env]
+# It listens on 80 and 443.
+capabilities: [CAP_NET_BIND_SERVICE]

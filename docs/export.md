@@ -801,6 +801,14 @@ building machine's. A service's deploy definition may name `env_files`,
 rendered files handed to the service manager as the program's environment, so
 no secret is written into the unit.
 
+A Linux unit gives the program no capability unless the definition names it
+under `capabilities`, such as `CAP_NET_BIND_SERVICE` for a server on 80 and
+443: it is both the ambient set and the bounding set, so the program runs as
+the bundle's owner with that one power and no other. A launchd bundle refuses
+a definition that names any. The unit also points the XDG data, config, state
+and cache directories into `var/`, so what a program keeps there, such as
+Caddy's certificates, stays with the bundle across rebuilds.
+
 A service's deploy definition names where its program comes from under
 `binary`, with exactly one of:
 

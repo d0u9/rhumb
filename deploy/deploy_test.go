@@ -92,6 +92,9 @@ files:
 			t.Errorf("ctl lacks %q:\n%s", want, ctl)
 		}
 	}
+	if !strings.Contains(string(ctl), `echo "CapabilityBoundingSet="`) {
+		t.Error("a unit without capabilities does not drop them all")
+	}
 	if strings.Contains(string(ctl), "MICROBIN_PORT") {
 		t.Error("ctl carries the env file's contents")
 	}
@@ -231,5 +234,27 @@ func TestDescribe(t *testing.T) {
 	m.Platform = "plan9/386"
 	if Describe(m, Options{}).Err == nil {
 		t.Fatal("a platform with no service manager described as buildable")
+	}
+}
+
+// Caddy listens below 1024: its unit gives it that capability and no other,
+// and a launchd bundle, with nothing to give it, refuses.
+func TestBuild_Capabilities(t *testing.T) {
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "Caddyfile"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, "caddy.env"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: sea\ninstance: caddy-01\nservice: caddy\nruntime: host\nfiles:\n  - path: Caddyfile\n  - path: caddy.env\n"), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{Platform: "linux/amd64", Binary: "/bin/sh"}); err != nil {
+		t.Fatal(err)
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	for _, want := range []string{`echo "AmbientCapabilities=CAP_NET_BIND_SERVICE"`, `echo "CapabilityBoundingSet=CAP_NET_BIND_SERVICE"`, "XDG_DATA_HOME=$DIR/var/share"} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q", want)
+		}
+	}
+	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
+		t.Error("a launchd bundle took capabilities")
 	}
 }
