@@ -1,0 +1,15 @@
+# realm, the TCP and UDP port forwarder. The export renders every endpoint
+# into config.toml.
+binary:
+  name: realm
+  release:
+    github: zhboner/realm
+    version: latest
+    url: realm-{target}.tar.gz
+    targets:
+      darwin/arm64: aarch64-apple-darwin
+      darwin/amd64: x86_64-apple-darwin
+      # musl: statically linked, so it runs whatever the machine's glibc.
+      linux/arm64: aarch64-unknown-linux-musl
+      linux/amd64: x86_64-unknown-linux-musl
+command: ["{bin}/realm", "-c", "{conf}/config.toml"]
