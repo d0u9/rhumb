@@ -21,10 +21,8 @@ import (
 type Service struct {
 	Binary struct {
 		Name string `yaml:"name"`
-		// Default is the source used when the build names none; the only
-		// one when a single source is written.
-		Default string  `yaml:"default"`
-		Sources Sources `yaml:"sources"`
+		// Exactly one of the sources is written.
+		Sources `yaml:",inline"`
 	} `yaml:"binary"`
 	Command []string `yaml:"command"`
 	// EnvFiles are rendered files, in conf/, that hold the program's
@@ -34,21 +32,17 @@ type Service struct {
 	Expose   []string `yaml:"expose"`
 }
 
-// Sources are the ways a service's binary may reach a machine. A build
-// picks one; the others are only what could have been picked.
+// Sources are the ways a service's binary may reach a machine. A
+// definition writes one.
 type Sources struct {
 	// Release downloads a published archive when the bundle is built, so
 	// the bundle carries the program and the machine needs no network.
 	Release *Release `yaml:"release"`
-	// Package installs the program with the machine's package manager when
-	// the bundle is installed, by manager: apt, dnf, yum, apk, brew.
-	Package map[string]string `yaml:"package"`
+	// Apt is the package that apt installs when the bundle is installed.
+	Apt string `yaml:"apt"`
 	// Path is where the program already is on the machine; nothing
 	// installs it.
 	Path string `yaml:"path"`
-	// Script is shell run by ctl install, from the bundle's directory,
-	// which leaves the program at bin/<name>.
-	Script string `yaml:"script"`
 }
 
 // Release is a published archive holding the binary at its top level.
@@ -67,9 +61,8 @@ type Release struct {
 // Source names.
 const (
 	SourceRelease = "release"
-	SourcePackage = "package"
+	SourceApt     = "apt"
 	SourcePath    = "path"
-	SourceScript  = "script"
 )
 
 // Names is the sources written, in a fixed order.
@@ -78,14 +71,11 @@ func (s Sources) Names() []string {
 	if s.Release != nil {
 		out = append(out, SourceRelease)
 	}
-	if len(s.Package) > 0 {
-		out = append(out, SourcePackage)
+	if s.Apt != "" {
+		out = append(out, SourceApt)
 	}
 	if s.Path != "" {
 		out = append(out, SourcePath)
-	}
-	if s.Script != "" {
-		out = append(out, SourceScript)
 	}
 	return out
 }
@@ -117,36 +107,14 @@ func LoadService(name, dir string) (Service, error) {
 	if s.Binary.Name == "" || len(s.Command) == 0 {
 		return s, fmt.Errorf("service %q: binary.name and command are required", name)
 	}
-	names := s.Binary.Sources.Names()
-	if len(names) == 0 {
-		return s, fmt.Errorf("service %q: binary.sources names none of release, package, path, script", name)
-	}
-	if s.Binary.Default == "" && len(names) == 1 {
-		s.Binary.Default = names[0]
-	}
-	if _, err := s.Source(""); err != nil {
-		return s, fmt.Errorf("service %q: %w", name, err)
+	if names := s.Binary.Names(); len(names) != 1 {
+		return s, fmt.Errorf("service %q: binary writes %d of release, apt and path; it takes one", name, len(names))
 	}
 	return s, nil
 }
 
-// Source is the source a build uses: want when given, the default
-// otherwise.
-func (s Service) Source(want string) (string, error) {
-	if want == "" {
-		want = s.Binary.Default
-	}
-	names := s.Binary.Sources.Names()
-	if want == "" {
-		return "", fmt.Errorf("binary has sources %s and no default", strings.Join(names, ", "))
-	}
-	for _, n := range names {
-		if n == want {
-			return want, nil
-		}
-	}
-	return "", fmt.Errorf("binary has no source %q; it has %s", want, strings.Join(names, ", "))
-}
+// Source is the one source the definition writes.
+func (s Service) Source() string { return s.Binary.Names()[0] }
 
 // Resolve fills a "latest" version in from GitHub.
 func (r Release) Resolve() (Release, error) {
