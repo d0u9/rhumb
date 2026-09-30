@@ -272,3 +272,20 @@ func TestRelease_TagAndBareBinary(t *testing.T) {
 		t.Error("a tar.gz is not taken for an archive")
 	}
 }
+
+func TestDownload_NodeDecidesUnlessTheBuilderDoes(t *testing.T) {
+	m := Manifest{Download: DownloadBuild}
+	for _, c := range []struct {
+		m    Manifest
+		opt  string
+		want string
+	}{
+		{Manifest{}, "", DownloadInstall},
+		{m, "", DownloadBuild},
+		{m, DownloadInstall, DownloadInstall},
+	} {
+		if got := downloadFor(c.m, Options{Download: c.opt}); got != c.want {
+			t.Errorf("node %q, builder %q: got %q, want %q", c.m.Download, c.opt, got, c.want)
+		}
+	}
+}

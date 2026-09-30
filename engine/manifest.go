@@ -31,6 +31,7 @@ type DeployManifest struct {
 	Service  string `yaml:"service"`
 	Runtime  string `yaml:"runtime"`
 	Platform string `yaml:"platform,omitempty"`
+	Download string `yaml:"download,omitempty"`
 	Root     string `yaml:"root,omitempty"`
 	// Dir is where a host instance is installed on the machine.
 	Dir      string                     `yaml:"dir,omitempty"`
@@ -106,6 +107,7 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		Service:  t.Service,
 		Runtime:  inst.RuntimeOr(),
 		Platform: node.Platform,
+		Download: node.Download,
 		Files:    make([]manifestFile, 0, len(files)),
 	}
 	for _, f := range files {

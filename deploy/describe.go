@@ -64,7 +64,7 @@ func Describe(m Manifest, opt Options) Description {
 	case svc.Binary.Release != nil:
 		r := svc.Binary.Release
 		d.Binary = svc.Binary.Name + " " + r.Version + " release, downloaded "
-		if opt.Download != DownloadBuild {
+		if downloadFor(m, opt) != DownloadBuild {
 			d.Binary += "on the machine"
 		} else {
 			d.Binary += "now"
