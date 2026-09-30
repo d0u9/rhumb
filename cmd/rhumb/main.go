@@ -24,6 +24,9 @@ commands:
   reservations <network>       print the address reservations a router should hold
   migrate node --node from=<old>,to=<new> [--network ...] [--apply --yes]
                                report, or apply, moving a node's workload to another node
+  deploy build <export-dir> --to <bundle> [--platform os/arch] [--bin file] [--services dir]
+                               bundle one exported instance with its program and ctl
+  deploy gc [--yes]            list, or remove, what deleted bundles left registered
 
 --root and --secrets default to $RHUMB_ROOT and $RHUMB_SECRETS.
 `
@@ -94,6 +97,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) error {
 		}
 	case "reservations":
 		action = cli.Reservations
+	case "deploy":
+		return runDeploy(rest, out, errOut)
 	case "migrate":
 		for _, n := range []string{"node", "network", "instance", "route", "published", "scenario"} {
 			str(n, "migration plan: "+n+" changes")
