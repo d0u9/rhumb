@@ -31,6 +31,8 @@ type Manifest struct {
 	Instance string `yaml:"instance"`
 	Service  string `yaml:"service"`
 	Runtime  string `yaml:"runtime"`
+	// Platform is the machine's GOOS/GOARCH when its node says.
+	Platform string `yaml:"platform"`
 	Files    []struct {
 		Path       string `yaml:"path"`
 		Executable bool   `yaml:"executable"`

@@ -211,3 +211,120 @@ uninstall)
 	;;
 esac
 `
+
+// ctlLinux is the ctl of a bundle for Linux. It registers the program as a
+// systemd system service that runs as whoever owns the bundle's directory:
+// it starts at boot, and systemd restarts it when it exits. Registering needs
+// root, so ctl reruns itself through sudo when it is not.
+const ctlLinux = `#!/bin/sh
+# ctl for {{.M.Node}}/{{.M.Instance}} ({{.M.Service}}), written by rhumb deploy.
+#
+#   ./ctl install      register with systemd, link commands, start
+#   ./ctl uninstall    stop, unregister, unlink; --purge also deletes var/
+#   ./ctl start | stop | reload | status | logs
+#   ./ctl link | unlink    put the bundle's commands on the owner's $PATH
+#   ./ctl run          run in the foreground, for debugging
+#
+# The bundle may live anywhere: every path below is found from this file.
+# The program runs as the owner of this directory, with var/ as its
+# working directory.
+set -eu
+
+DIR=$(cd "$(dirname "$0")" && pwd -P)
+LABEL={{.Label}}
+UNIT="/etc/systemd/system/$LABEL.service"
+OWNER=$(stat -c %U "$DIR")
+GROUP=$(stat -c %G "$DIR")
+SHIMS="$(getent passwd "$OWNER" | cut -d: -f6)/.local/bin"
+EXPOSE="{{.Expose}}"
+# A shim carries this line, which is how unlink knows it is this bundle's.
+MARK="# rhumb-bundle: $DIR"
+
+command_line() { set -- {{.Args}}; for a; do printf '%s\n' "$a"; done; }
+env_files() { set -- {{.EnvFiles}}; for a; do printf '%s\n' "$a"; done; }
+
+# systemd reads a quoted word with C-style escapes and expands %.
+unit_word() { printf '"%s"' "$(printf %s "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/%/%%/g')"; }
+
+as_root() { [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"; }
+
+write_unit() {
+	install -d -o "$OWNER" -g "$GROUP" -m 700 "$DIR/var"
+	{
+		echo "# Written by $DIR/ctl. Do not edit: rebuild the bundle."
+		echo "[Unit]"
+		echo "Description={{.M.Service}} {{.M.Node}}/{{.M.Instance}}"
+		echo "Wants=network-online.target"
+		echo "After=network-online.target"
+		echo
+		echo "[Service]"
+		echo "User=$OWNER"
+		echo "Group=$GROUP"
+		echo "WorkingDirectory=$(unit_word "$DIR/var")"
+		env_files | while IFS= read -r f; do echo "EnvironmentFile=$(unit_word "$f")"; done
+		printf 'ExecStart='
+		command_line | while IFS= read -r a; do printf '%s ' "$(unit_word "$a")"; done
+		echo
+		echo "Restart=always"
+		echo "RestartSec=5"
+		echo "NoNewPrivileges=true"
+		echo
+		echo "[Install]"
+		echo "WantedBy=multi-user.target"
+	} >"$UNIT.tmp"
+	mv "$UNIT.tmp" "$UNIT"
+	systemctl daemon-reload
+}
+
+link() {
+	[ -n "$EXPOSE" ] || return 0
+	install -d -o "$OWNER" -g "$GROUP" "$SHIMS"
+	for name in $EXPOSE; do
+		shim="$SHIMS/$name"
+		if [ -e "$shim" ] && ! grep -qxF "$MARK" "$shim"; then
+			echo "$shim exists and is not this bundle's; not replacing it" >&2
+			exit 1
+		fi
+		printf '#!/bin/sh\n%s\nexec "%s/bin/%s" "$@"\n' "$MARK" "$DIR" "$name" >"$shim"
+		chown "$OWNER:$GROUP" "$shim"
+		chmod 755 "$shim"
+	done
+}
+
+unlink_shims() {
+	for name in $EXPOSE; do
+		shim="$SHIMS/$name"
+		if [ -f "$shim" ] && grep -qxF "$MARK" "$shim"; then rm -f "$shim"; fi
+	done
+}
+
+case "${1:-}" in
+install) as_root "$@"; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+uninstall)
+	as_root "$@"
+	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi
+	rm -f "$UNIT"
+	systemctl daemon-reload
+	unlink_shims
+	if [ "${2:-}" = --purge ]; then rm -rf "$DIR/var"; fi
+	;;
+start) as_root "$@"; systemctl start "$LABEL" ;;
+stop) as_root "$@"; systemctl stop "$LABEL" ;;
+reload) as_root "$@"; write_unit; systemctl restart "$LABEL" ;;
+status) systemctl --no-pager status "$LABEL" ;;
+logs) shift; journalctl --no-pager -u "$LABEL" -n 100 "$@" ;;
+link) as_root "$@"; link ;;
+unlink) as_root "$@"; unlink_shims ;;
+run)
+	mkdir -p "$DIR/var"; cd "$DIR/var"
+	set -a
+	IFS='
+'
+	for f in $(env_files); do . "$f"; done
+	unset IFS
+	set +a
+	set -- {{.Args}}; exec "$@"
+	;;
+*) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac
+`

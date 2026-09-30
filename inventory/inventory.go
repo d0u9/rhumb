@@ -541,6 +541,11 @@ type Node struct {
 	// Runtime is what delivers an instance on this node that writes no
 	// `runtime` of its own. Empty means RuntimeHost.
 	Runtime string `yaml:"runtime"`
+	// Platform is the machine's GOOS/GOARCH, such as "linux/amd64": which
+	// release of a program a bundle for this node carries, and which
+	// service manager it registers with. Empty leaves it to whoever builds
+	// the bundle. It is carried into the manifest and read nowhere else.
+	Platform string `yaml:"platform"`
 	// Accounts is this machine's POSIX accounts by name, for templates that
 	// must write numeric owners: a file on a volume keeps the number, so the
 	// number is written once, here. See

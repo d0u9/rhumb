@@ -45,14 +45,21 @@ func Build(src, dst string, opt Options) error {
 	}
 	platform := opt.Platform
 	if platform == "" {
+		platform = m.Platform
+	}
+	if platform == "" {
 		platform = runtime.GOOS + "/" + runtime.GOARCH
 	}
-	if !strings.HasPrefix(platform, "darwin/") {
-		return fmt.Errorf("platform %s: only darwin (launchd) bundles are supported so far", platform)
+	tmpl, ok := ctlTemplates[strings.SplitN(platform, "/", 2)[0]]
+	if !ok {
+		return fmt.Errorf("platform %s: only darwin (launchd) and linux (systemd) bundles are supported", platform)
 	}
 	svc, err := LoadService(m.Service, opt.Services)
 	if err != nil {
 		return err
+	}
+	if len(svc.EnvFiles) > 0 && strings.HasPrefix(platform, "darwin/") {
+		return fmt.Errorf("service %q: env_files is not supported by launchd bundles yet", m.Service)
 	}
 	label := Label(m)
 	if old, err := os.ReadFile(filepath.Join(dst, "ctl")); err == nil && !bytes.Contains(old, []byte("LABEL="+label+"\n")) {
@@ -91,7 +98,7 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
-	ctl, err := renderCtl(m, svc, label)
+	ctl, err := renderCtl(tmpl, m, svc, label)
 	if err != nil {
 		return err
 	}
@@ -182,16 +189,26 @@ func shellArg(arg string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(q, "''"), "''")
 }
 
-var ctlTemplate = template.Must(template.New("ctl").Parse(ctlDarwin))
+// ctlTemplates is the ctl of a host bundle by GOOS: each registers the
+// program with that system's service manager.
+var ctlTemplates = map[string]*template.Template{
+	"darwin": template.Must(template.New("ctl").Parse(ctlDarwin)),
+	"linux":  template.Must(template.New("ctl").Parse(ctlLinux)),
+}
 
-func renderCtl(m Manifest, svc Service, label string) ([]byte, error) {
+func renderCtl(tmpl *template.Template, m Manifest, svc Service, label string) ([]byte, error) {
 	args := make([]string, len(svc.Command))
 	for i, a := range svc.Command {
 		args[i] = shellArg(a)
 	}
 	var out bytes.Buffer
-	err := ctlTemplate.Execute(&out, map[string]any{
+	envFiles := make([]string, len(svc.EnvFiles))
+	for i, f := range svc.EnvFiles {
+		envFiles[i] = shellArg("{conf}/" + f)
+	}
+	err := tmpl.Execute(&out, map[string]any{
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
+		"EnvFiles": strings.Join(envFiles, " "),
 	})
 	return out.Bytes(), err
 }

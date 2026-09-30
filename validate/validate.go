@@ -511,6 +511,16 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		}
 	}
 
+	// A node's platform, when written, is GOOS/GOARCH: a bundle picks its
+	// release and its service manager by it.
+	for _, n := range inv.Nodes {
+		if p := n.Platform; p != "" {
+			if os, arch, ok := strings.Cut(p, "/"); !ok || os == "" || arch == "" || strings.Contains(arch, "/") {
+				add("node %q: platform %q is not os/arch, such as linux/amd64", n.ID, p)
+			}
+		}
+	}
+
 	// Rule 32: a containerised instance binds every interface of its
 	// container and joins only container networks its node lists; a host
 	// process joins none. A node's `containers` names no network twice, each

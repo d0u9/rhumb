@@ -76,7 +76,7 @@ data.
 | What | The names |
 | --- | --- |
 | Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
-| Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `containers`, `accounts`, `instances` |
+| Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `containers`, `accounts`, `instances` |
 | Container network keys | `name`, `subnet`, `gateway`, per entry of a node's `containers` |
 | Profile keys | `export`, `values`, `access`, `runs` |
 | Instance keys | `id`, `service`, `ports`, `process`, `runtime`, `bind`, `containers`, `self`, `values`, `deploy`, `dials` |
@@ -922,6 +922,11 @@ instances:
     service: sshd
     runtime: host
 ```
+
+A node may also write `platform`, its GOOS/GOARCH such as `linux/amd64`. Nothing
+in the model reads it; it is carried into each instance's
+[manifest](export.md#the-manifest), where a deployment picks the program's
+release and the service manager by it.
 
 **A containerised instance binds `0.0.0.0`, and it is not written.** Inside a
 container every interface is the container's own, so no other bind is

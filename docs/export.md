@@ -762,6 +762,7 @@ node: node-8-server-linux-01
 instance: caddy-01
 service: caddy
 runtime: docker           # the instance's runtime, host when unset
+platform: linux/amd64     # the node's platform, when it writes one
 root: /srv/docker         # deploy values' root, lifted out of deploy
 files:                    # every file written for this instance, in order
   - path: Caddyfile
@@ -791,6 +792,14 @@ container `name` and `hostname`, `image`, `restart`, `user`, `dns`,
 Each port gains its `transport`, and each file its `place` — relative to `dir`,
 or an absolute machine path — and `mode`. It is everything `rhumb deploy`
 needs, and all it reads.
+
+A host instance's bundle picks its release and its service manager by
+`platform`: `darwin` registers a LaunchAgent, `linux` a systemd system service
+that runs as the owner of the bundle's directory, with `var/` as its working
+directory. `--platform` overrides it, and a node that writes none gets the
+building machine's. A service's deploy definition may name `env_files`,
+rendered files handed to the service manager as the program's environment, so
+no secret is written into the unit.
 
 A test renders every containerised instance and checks that the ports,
 networks, addresses, container name and deploy volumes of the compose.yaml
