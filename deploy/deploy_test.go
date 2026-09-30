@@ -58,6 +58,18 @@ func TestBuild_WritesABundleThatKeepsVar(t *testing.T) {
 	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
 		t.Fatalf("ctl does not parse: %s", out)
 	}
+	// On macOS install only puts the program in place, where it was
+	// unpacked; start and enable are asked for.
+	if !strings.Contains(string(ctl), "\nDIR=\"$HERE\"\n") {
+		t.Error("a macOS bundle with no dir does not stay where it is")
+	}
+	_, rest, _ := strings.Cut(string(ctl), "\ninstall)")
+	install, _, _ := strings.Cut(rest, ";;")
+	for _, never := range []string{"launchctl", "write_plist", "; start", "\tstart"} {
+		if strings.Contains(install, never) {
+			t.Errorf("install runs %s:\n%s", never, install)
+		}
+	}
 	os.MkdirAll(filepath.Join(dst, "var"), 0o755)
 	os.WriteFile(filepath.Join(dst, "var", "state"), nil, 0o600)
 	if err := Build(src, dst, opt); err != nil {

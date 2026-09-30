@@ -794,13 +794,22 @@ or an absolute machine path — and `mode`. It is everything `rhumb deploy`
 needs, and all it reads.
 
 A host instance's bundle picks its release and its service manager by
-`platform`: `darwin` registers a LaunchAgent where the bundle is, `linux` a
-systemd system service. A Linux `ctl install` first copies the bundle into
-the instance's `deploy.dir`, `/srv/rhumb/<service>` by default, beside
-`/srv/docker/<service>`: `ctl`, `bin/`, `conf/` and `manifest.yaml` are
-replaced and `var/` is kept, so the unpacked bundle may be deleted after. The
-unit runs as the owner of the unpacked bundle, with the install dir's `var/` as
-its working directory. `--platform` overrides it, and a node that writes none gets the
+`platform`: `darwin` launchd, `linux` a systemd system service.
+
+`ctl install` copies the bundle into the instance's `deploy.dir` when there is
+one: `ctl`, `bin/`, `conf/` and `manifest.yaml` are replaced and `var/` is
+kept, so the unpacked bundle may be deleted after. On Linux the dir defaults to
+`/srv/rhumb/<service>`, beside `/srv/docker/<service>`, and install registers
+and starts the unit, which runs as the owner of the unpacked bundle with the
+install dir's `var/` as its working directory.
+
+On macOS the bundle stays where it was unpacked unless `deploy.dir` says
+otherwise, and install only puts the program in place and links its commands:
+nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
+`ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
+disable` takes that back. Either way launchd restarts it when it exits.
+
+`--platform` overrides it, and a node that writes none gets the
 building machine's. A service's deploy definition may name `env_files`,
 rendered files handed to the service manager as the program's environment, so
 no secret is written into the unit.

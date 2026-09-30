@@ -1,23 +1,31 @@
 package deploy
 
-// ctlDarwin is the ctl of a bundle for macOS. It registers the program as a
-// LaunchAgent: it runs while its user is logged in, and launchd restarts it
-// when it exits.
+// ctlDarwin is the ctl of a bundle for macOS. install only puts the program
+// in place; start runs it under launchd for this login, and enable makes it
+// a LaunchAgent that starts at every login. launchd restarts it when it
+// exits.
 const ctlDarwin = `#!/bin/sh
 # ctl for {{.M.Node}}/{{.M.Instance}} ({{.M.Service}}), written by rhumb deploy.
 #
-#   ./ctl install      register with launchd, link commands, start
-#   ./ctl uninstall    stop, unregister, unlink; --purge also deletes var/
-#   ./ctl start | stop | reload | status | logs
+#   ./ctl install      put the program in place and link commands; nothing starts
+#   ./ctl start | stop     run under launchd until stopped or logged out
+#   ./ctl enable | disable start at every login, or no longer
+#   ./ctl uninstall    stop, disable, unlink; --purge also deletes var/
+#   ./ctl reload | status | logs
 #   ./ctl link | unlink    put the bundle's commands on $PATH, or take them off
 #   ./ctl run          run in the foreground, for debugging
 #
-# The bundle may live anywhere: every path below is found from this file.
+# The bundle may be unpacked anywhere. With a dir in its manifest, install
+# copies it there and keeps var/; without, it stays where it is.
 set -eu
 
-DIR=$(cd "$(dirname "$0")" && pwd -P)
+HERE=$(cd "$(dirname "$0")" && pwd -P)
+DIR={{.Dir}}
 LABEL={{.Label}}
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+# Enabled, the plist is in LaunchAgents and launchd loads it at login;
+# started only, it is in var/ and nothing loads it again.
+AGENT="$HOME/Library/LaunchAgents/$LABEL.plist"
+SESSION="$DIR/var/$LABEL.plist"
 # The program comes from its {{.Source}} source; BIN is its directory.
 BIN={{.BinDir}}
 install_binary() {
@@ -34,7 +42,24 @@ command_line() { set -- {{.Args}}; for a; do printf '%s\n' "$a"; done; }
 
 xml() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
+copy_in() {
+	[ "$HERE" != "$DIR" ] || return 0
+	mkdir -p "$DIR"
+	rm -rf "$DIR/bin" "$DIR/conf"
+	for f in ctl manifest.yaml bin conf; do
+		[ ! -e "$HERE/$f" ] || cp -R "$HERE/$f" "$DIR/$f"
+	done
+	mkdir -p "$DIR/bin"
+	echo "installed into $DIR; $HERE may be deleted"
+}
+
+enabled() { [ -f "$AGENT" ]; }
+
+# plist is the file launchd loads this program from.
+plist() { if enabled; then echo "$AGENT"; else echo "$SESSION"; fi; }
+
 write_plist() {
+	PLIST=$1
 	mkdir -p "$DIR/var/log" "$(dirname "$PLIST")"
 	{
 		cat <<EOF
@@ -67,8 +92,10 @@ EOF
 loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
 
 start() {
-	[ -f "$PLIST" ] || { echo "not installed; run ./ctl install" >&2; exit 1; }
-	loaded || launchctl bootstrap "$DOMAIN" "$PLIST"
+	[ -f "$DIR/ctl" ] || { echo "not installed; run ./ctl install" >&2; exit 1; }
+	loaded && return 0
+	write_plist "$(plist)"
+	launchctl bootstrap "$DOMAIN" "$(plist)"
 }
 
 stop() { if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi; }
@@ -76,11 +103,12 @@ stop() { if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi; }
 status() {
 	if loaded; then
 		launchctl print "$DOMAIN/$LABEL" | grep -E "^$(printf '\t')(state|pid|last exit code) =" | sed 's/^[[:space:]]*//'
-	elif [ -f "$PLIST" ]; then
+	elif [ -f "$DIR/ctl" ]; then
 		echo "installed, stopped"
 	else
 		echo "not installed"
 	fi
+	if enabled; then echo "starts at login"; else echo "does not start at login"; fi
 }
 
 link() {
@@ -104,22 +132,41 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) install_binary; write_plist; link; stop; start ;;
+install)
+	copy_in; install_binary; link
+	echo "installed; ./ctl start runs it now, ./ctl enable at every login"
+	;;
 uninstall)
 	stop
-	rm -f "$PLIST"
+	rm -f "$AGENT" "$SESSION"
 	unlink_shims
 	if [ "${2:-}" = --purge ]; then rm -rf "$DIR/var"; fi
 	;;
 start) start ;;
 stop) stop ;;
-reload) stop; write_plist; start ;;
+enable)
+	was=$(loaded && echo 1 || true)
+	stop
+	write_plist "$AGENT"
+	rm -f "$SESSION"
+	# Enabling does not start what was stopped.
+	[ -z "$was" ] || start
+	echo "starts at every login; ./ctl start runs it now"
+	;;
+disable)
+	was=$(loaded && echo 1 || true)
+	stop
+	rm -f "$AGENT"
+	[ -z "$was" ] || start
+	echo "no longer starts at login"
+	;;
+reload) if loaded; then stop; start; fi ;;
 status) status ;;
 logs) tail -n 100 "$DIR"/var/log/*.log ;;
 link) link ;;
 unlink) unlink_shims ;;
 run) mkdir -p "$DIR/var"; cd "$DIR/var"; set -- {{.Args}}; exec "$@" ;;
-*) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+*) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac
 `
 

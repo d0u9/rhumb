@@ -177,14 +177,13 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 	}
 
 	if man.Runtime == inventory.RuntimeHost {
-		dir, _ := inst.Deploy["dir"].(string)
-		if dir == "" {
-			dir = path.Join(DefaultHostRoot, t.Service)
+		// Unwritten, the deployment picks its platform's default.
+		if dir, _ := inst.Deploy["dir"].(string); dir != "" {
+			if !path.IsAbs(dir) {
+				return nil, fmt.Errorf("%s: deploy dir %q is not absolute", instance, dir)
+			}
+			man.Dir = dir
 		}
-		if !path.IsAbs(dir) {
-			return nil, fmt.Errorf("%s: deploy dir %q is not absolute", instance, dir)
-		}
-		man.Dir = dir
 	}
 
 	if docker, ok := m.Data.Dockers[t.Service]; ok && inst.Containerised() {
