@@ -280,6 +280,74 @@ export puts them in, not by the file name. Copying the right one to the right
 machine is done by hand and deliberately so: a name that varied per instance
 would mean editing a service unit to match every time.
 
+### How a container is started: docker.yaml
+
+A service's configuration says how the program behaves; something else says how
+it is started. For a containerised instance that is a compose file, and most of
+one is the same for every program: one project per instance, a container name,
+the container networks it joins with its alias and fixed address, each port
+published at the addresses the model derives, and a script that creates the
+networks and directories and copies the files into place. Only a little of it is
+the program's own: its image, which transport each port speaks, where in the
+container it reads each rendered file, what state it keeps.
+
+So a service says only that, as data, in `services/<service>/docker.yaml`, and
+the compose file is generated from it by `rhumb deploy build`. No service writes
+a compose template:
+
+```yaml
+# services/caddy/docker.yaml
+ports: {http: tcp, https: tcp}          # every port the instance declares
+mounts:                                 # a directory of the instance's, mounted
+  conf: {target: /etc/caddy, files: [Caddyfile]}
+files:
+  caddy.env: {env_file: true}           # the container's environment, 0600
+  index.html: {host: "{{ (instance).values.static_root }}"}
+state: {data: /data, config: /config}   # kept across reinstalls
+volumes:                                # machine paths every instance mounts
+  - {source: "{{ (instance).values.static_root }}", target: "{{ (instance).values.static_root }}", ro: true}
+reload: [caddy, reload, --config, /etc/caddy/Caddyfile]
+defaults:                               # what an instance's deploy overrides
+  image: d0u9/caddy-cloudflare:latest
+  restart: unless-stopped
+  container_name: srv.caddy
+```
+
+| Key | Meaning |
+| --- | --- |
+| `ports` | Each port's transport: `tcp`, `udp` or `both`. A port the instance declares and this does not name is an error. |
+| `files` | Where a rendered file goes, by output name: `target` mounts it alone at that container path; `env_file` hands it to the container as its environment; `host` copies it to that machine directory and mounts nothing. `mode` is its permission bits, `0644` unless written, `0600` for an env file. A file named nowhere is installed into the instance's directory. |
+| `mounts` | Directories of the instance's directory, by name, mounted at `target` and holding the named `files`; read-only unless `writable`. `mode` applies to its files, and a directory whose files only their owner reads is itself `0700`. |
+| `state` | What the program keeps between runs, by name: a container path, kept in that directory of the instance's directory, or `{target, named: true}` for a named volume. Reinstalling leaves it alone. |
+| `volumes` | Machine paths every instance mounts, in the shape of an instance's `deploy.volumes`, which are added after them. |
+| `environment` | Set in the container as written. |
+| `privileges` | Merged into the compose service: only `devices`, `cap_add`, `cap_drop`, `sysctls`, `read_only`, `security_opt`, `tmpfs`. |
+| `reload` | Run in the container once it is started, for a program that does not reread its configuration. |
+| `setup` | A rendered file of the service, a shell script, run on the machine after the container starts, from the instance's directory, with `CONTAINER` set to its name: what only this program needs done once it is up, such as creating its accounts. |
+| `defaults` | The keys an instance's [`deploy`](inventory.md#what-a-container-needs-beyond-the-model) may override. |
+
+**Only a string value may hold an expression.** It is rendered with the view a
+configuration template has, plus the instance's `deploy` over the defaults as
+the document, and `(instance).subnets`, the ranges of the container networks it
+joins. A value that renders empty drops what it is part of — a mount, a file's
+placement — which is the one way anything here is conditional. The file itself
+is never a template: the deployment tool reads its structure before anything is
+rendered, which is what lets it generate the compose file for every service the
+same way.
+
+The export writes the rendered files and the [manifest](#the-manifest), which
+carries the resolved `container`; no compose file and no script are exported.
+`rhumb deploy build <export-dir> --to <bundle>` writes them from the manifest
+alone: `compose.yaml`, the files, and a `ctl` whose `install` creates the
+networks and directories, places the files (keeping a replaced one as `.bak`),
+and starts the container. The instance's directory is the compose project's, so
+its name is the project's name and a named volume's prefix.
+
+A service holds a `docker.yaml` or a [`deploy/`](#a-second-file-what-deploys-it),
+never both. `deploy/` remains for a service whose containers do not fit the
+shape above — several one-shot containers, each with its own mounts — and
+renders its own compose file from templates.
+
 ### A second file: what deploys it
 
 A service's configuration says how the program behaves. Something else says how
@@ -288,7 +356,10 @@ the ports — the same numbers, in another spelling, maintained by hand. Two
 truths, and the model's own [one-to-one rule](inventory.md#what-runs-the-process)
 is only a convention until one of them is generated.
 
-So a service directory may hold a `deploy/`, laid out the way an export is:
+So a service directory may hold a `deploy/`, laid out the way an export is. It
+is the older of the two ways and the one for a container that does not fit
+[`docker.yaml`](#how-a-container-is-started-dockeryaml); the example below
+predates it:
 
 ```text
 services/microbin/
@@ -681,7 +752,8 @@ ports:                    # by name; bind is the derived host mapping
 networks:                 # container networks joined, with a fixed address
   - {name: tailnet, subnet: 172.29.250.0/24, address: 172.29.250.10}
 accounts: {}              # the node's accounts, containerised instances only
-deploy: {}                # defaults.yaml with the instance's deploy over it
+deploy: {}                # deploy/defaults.yaml with the instance's deploy over it
+container: {}             # a docker.yaml service's container, resolved
 ```
 
 `host_port` appears on a port only when the host publishes it under another
@@ -690,9 +762,20 @@ here: its keys are each service's own mechanism, which belongs to the tool
 that deploys it. An instance's `values` are not in the manifest; they
 configure the program, and reach it through its rendered files.
 
+For a service holding a [`docker.yaml`](#how-a-container-is-started-dockeryaml),
+the manifest carries `container` instead of `deploy`: the instance's `dir`,
+container `name` and `hostname`, `image`, `restart`, `user`, `dns`,
+`env_files`, `environment`, every bind mount with its absolute `source` (and
+`create` for the ones inside `dir` that installing makes), named `volumes`,
+`privileges`, `reload` and `setup`, with no expression left in any of them.
+Each port gains its `transport`, and each file its `place` — relative to `dir`,
+or an absolute machine path — and `mode`. It is everything `rhumb deploy`
+needs, and all it reads.
+
 A test renders every containerised instance and checks that the ports,
 networks, addresses, container name and deploy volumes of the compose.yaml
-beside the manifest agree with it; the test lives in rhumb's `cli` package. Set `RHUMB_ROOT` and `RHUMB_SECRETS`
+beside the manifest, or composed from it for a `docker.yaml` service, agree
+with it; the test lives in rhumb's `cli` package. Set `RHUMB_ROOT` and `RHUMB_SECRETS`
 to run the same check against a real generator root.
 
 An export renders every target first, and publishes only once all of them have

@@ -466,6 +466,11 @@ type Service struct {
 	Deploy       *Deploy
 	DeployDir    string
 	DeployBroken string
+	// Docker is the parsed DockerFilename, or nil for a service holding
+	// none, and DockerBroken its parse error. A service holds either it or
+	// a DeployDir, never both.
+	Docker       *Docker
+	DockerBroken string
 }
 
 // ExportDef is one subdirectory of a service's ExportsDir that holds a
@@ -559,6 +564,20 @@ func Load(root string) (*Root, error) {
 				svc.DeployBroken = err.Error()
 			} else {
 				svc.Deploy = deploy
+			}
+		}
+
+		dockerPath := filepath.Join(root, ServicesDir, name, DockerFilename)
+		if _, err := os.Stat(dockerPath); err == nil {
+			svc.Manifest.Deploys = true
+			docker, err := loadDocker(dockerPath)
+			switch {
+			case err != nil:
+				svc.DockerBroken = err.Error()
+			case svc.DeployDir != "":
+				svc.DockerBroken = fmt.Sprintf("%s: the service also holds %s/; a container is started from one of the two", dockerPath, DeployDir)
+			default:
+				svc.Docker = docker
 			}
 		}
 

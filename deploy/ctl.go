@@ -117,3 +117,88 @@ run) mkdir -p "$DIR/var"; cd "$DIR/var"; set -- {{.Args}}; exec "$@" ;;
 *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac
 `
+
+// ctlDocker is the ctl of a containerised instance's bundle. install puts
+// the files into the container's directory and starts it; the bundle itself
+// is only what carried them there.
+const ctlDocker = `#!/bin/sh
+# ctl for {{.M.Node}}/{{.M.Instance}} ({{.M.Service}}), written by rhumb deploy.
+#
+#   ./ctl install      create networks and directories, install files, start
+#   ./ctl up | down | status | logs
+#   ./ctl uninstall    stop and remove the container; {{.C.Dir}} is kept
+#
+# COMPOSE overrides the compose command, docker compose by default.
+set -eu
+
+HERE=$(cd "$(dirname "$0")" && pwd -P)
+LABEL={{.Label}}
+DIR={{q .C.Dir}}
+COMPOSE=${COMPOSE:-docker compose}
+compose() { $COMPOSE --project-directory "$DIR" -f "$DIR/compose.yaml" "$@"; }
+
+# A container network is created with its range; one already there is
+# checked, never removed: other containers may be on it.
+networks() {
+{{- range .M.Networks}}
+	if ! docker network inspect {{q .Name}} >/dev/null 2>&1; then
+		docker network create --subnet {{q .Subnet}}{{with .Gateway}} --gateway {{q .}}{{end}} {{q .Name}} >/dev/null
+	elif ! docker network inspect {{q .Name}} | grep -q '"Subnet": "{{.Subnet}}"'; then
+		echo "docker network {{.Name}} exists without subnet {{.Subnet}}: stop its containers, remove it, then run again" >&2
+		exit 1
+	fi
+{{- end}}
+	:
+}
+
+# place FILE TO MODE installs one file, keeping the replaced one as .bak
+# when it differs.
+place() {
+	mkdir -p "$(dirname "$2")"
+	if [ -f "$2" ] && ! cmp -s "$HERE/files/$1" "$2"; then
+		cp -p -- "$2" "$2.bak"
+	fi
+	install -m "$3" "$HERE/files/$1" "$2"
+}
+
+install_files() {
+	mkdir -p "$DIR"
+{{- range .Creates}}
+	mkdir -p {{q .Dir}}
+{{- if .Mode}}
+	chmod {{.Mode}} {{q .Dir}}
+{{- end}}
+{{- end}}
+{{- range .Places}}
+	place {{q .From}} {{q .To}} {{.Mode}}
+{{- end}}
+	install -m 0644 "$HERE/compose.yaml" "$DIR/compose.yaml"
+}
+
+case ${1:-} in
+install)
+	networks
+	install_files
+	compose up -d --remove-orphans
+{{- if .Reload}}
+	compose exec {{q .C.Name}} {{.Reload}}
+{{- end}}
+{{- with .C.Setup}}
+	(cd "$DIR" && CONTAINER={{q $.C.Name}} sh ./{{q .}})
+{{- end}}
+	echo "{{.C.Name}} started from $DIR"
+	;;
+up) compose up -d --remove-orphans ;;
+down) compose down ;;
+status) compose ps ;;
+logs) shift; compose logs "$@" ;;
+uninstall)
+	compose down
+	echo "stopped; $DIR and what the container kept in it are left in place"
+	;;
+*)
+	sed -n '2,9p' "$0" >&2
+	exit 2
+	;;
+esac
+`

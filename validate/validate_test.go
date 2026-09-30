@@ -890,7 +890,7 @@ func TestValidate_DeployWithoutADeployDirectory(t *testing.T) {
 	inv.Nodes[0].Instances[0].Deploy = map[string]any{"image": "example:1"}
 	manifests := validManifests()
 	got := Validate(inv, manifests, validExports(), derived(t, inv, manifests), nil)
-	if !containsSubstring(got, `holds no deploy/ directory`) {
+	if !containsSubstring(got, `holds neither a deploy/ directory nor a docker.yaml`) {
 		t.Fatalf("Validate = %v, want a missing-deploy-directory issue", messages(got))
 	}
 }

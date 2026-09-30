@@ -37,8 +37,11 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
+	if m.Container != nil {
+		return buildDocker(m, src, dst)
+	}
 	if m.Runtime != "host" {
-		return fmt.Errorf("%s/%s runs in %s; only host instances are bundled so far", m.Node, m.Instance, m.Runtime)
+		return fmt.Errorf("%s/%s runs in %s and its manifest has no container: its service holds no docker.yaml", m.Node, m.Instance, m.Runtime)
 	}
 	platform := opt.Platform
 	if platform == "" {

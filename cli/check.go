@@ -9,6 +9,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/d0u9/rhumb/confgen"
 	"github.com/d0u9/rhumb/inventory"
 	"github.com/d0u9/rhumb/secretstore"
 	"github.com/d0u9/rhumb/target"
@@ -49,6 +50,16 @@ func Check(out io.Writer, global Settings) error {
 	// is computed from what did parse, so a rule failing underneath may be
 	// a consequence rather than a fault of its own.
 	problems = append(problems, BrokenFiles(l.Inv)...)
+	problems = append(problems, l.ServiceProblems...)
+	for _, n := range l.Inv.Nodes {
+		for _, inst := range n.Instances {
+			if _, ok := l.Dockers[inst.Service]; ok && inst.Deploy != nil {
+				if err := confgen.CheckDeployKeys(fmt.Sprintf("instance %q", inst.ID), inst.Deploy); err != nil {
+					problems = append(problems, err.Error())
+				}
+			}
+		}
+	}
 	for name, manifest := range l.Manifests {
 		// A service that renders nothing is a directory nothing deploys.
 		// Renders is what the two forms of the declaration meet in, so a
