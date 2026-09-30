@@ -801,19 +801,16 @@ building machine's. A service's deploy definition may name `env_files`,
 rendered files handed to the service manager as the program's environment, so
 no secret is written into the unit.
 
-A service's deploy definition names where its program comes from, under
-`binary.sources`, and the build picks one with `--source`, the definition's
-`default` otherwise:
+A service's deploy definition names where its program comes from under
+`binary`, with exactly one of:
 
 - `release` downloads a published archive when the bundle is built, so the
   bundle carries the program. With `github: owner/repo`, `version: latest` is
   the newest release, looked up at build time, and `url` may be only the
   asset's name.
-- `package` installs it with the machine's package manager on `ctl install`,
-  by manager: `apt`, `dnf`, `yum`, `apk`, `brew`.
+- `apt` is the package `ctl install` installs with apt, when the program is
+  not on the machine already.
 - `path` is where it already is on the machine; nothing installs it.
-- `script` is shell that `ctl install` runs, which leaves the program at
-  `$BIN`, the bundle's `bin/`.
 
 Whatever runs on the machine is written out in full in `ctl`, so it can be
 read before it is run.

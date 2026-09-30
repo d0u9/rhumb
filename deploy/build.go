@@ -25,9 +25,6 @@ type Options struct {
 	// Binary is a local program to bundle instead of what the source
 	// would give, for a machine with no network or a build of one's own.
 	Binary string
-	// Source is which of the service's binary sources to use, its default
-	// when empty.
-	Source string
 }
 
 // Build writes the bundle for the exported instance in src into dst.
@@ -93,10 +90,7 @@ func Build(src, dst string, opt Options) error {
 	if err := copyFile(filepath.Join(src, ManifestFile), filepath.Join(dst, ManifestFile), 0o600); err != nil {
 		return err
 	}
-	source, err := svc.Source(opt.Source)
-	if err != nil {
-		return fmt.Errorf("service %q: %w", m.Service, err)
-	}
+	source := svc.Source()
 	bin := filepath.Join(dst, "bin", svc.Binary.Name)
 	switch {
 	case opt.Binary != "":
@@ -135,7 +129,7 @@ func copyFile(from, to string, mode os.FileMode) error {
 // fetch downloads the service's release for platform, once per machine, and
 // unpacks its binary to bin.
 func fetch(svc Service, platform, bin string) error {
-	rel, err := svc.Binary.Sources.Release.Resolve()
+	rel, err := svc.Binary.Release.Resolve()
 	if err != nil {
 		return err
 	}
@@ -233,8 +227,8 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source s
 func binDir(svc Service, source string) string {
 	switch source {
 	case SourcePath:
-		return shQuote(path.Dir(svc.Binary.Sources.Path))
-	case SourcePackage:
+		return shQuote(path.Dir(svc.Binary.Path))
+	case SourceApt:
 		return `$(dirname "$(command -v ` + shQuote(svc.Binary.Name) + ` || echo /nonexistent/x)")`
 	}
 	return `"$DIR/bin"`
@@ -244,32 +238,12 @@ func binDir(svc Service, source string) string {
 // on the machine when the bundle does not carry it.
 func installBinary(svc Service, source string) string {
 	name := shQuote(svc.Binary.Name)
-	src := svc.Binary.Sources
+	src := svc.Binary
 	switch source {
 	case SourcePath:
 		return fmt.Sprintf("[ -x %s ] || { echo \"%s is not on this machine\" >&2; exit 1; }", shQuote(src.Path), strings.ReplaceAll(src.Path, `"`, ""))
-	case SourceScript:
-		return "(cd \"$DIR\" && mkdir -p bin && BIN=\"$DIR/bin\" sh -eu <<'RHUMB_SCRIPT'\n" + strings.TrimRight(src.Script, "\n") + "\nRHUMB_SCRIPT\n\t)\n\t[ -x \"$DIR/bin/\"" + name + " ] || { echo \"the install script left no bin/" + svc.Binary.Name + "\" >&2; exit 1; }"
-	case SourcePackage:
-		var b strings.Builder
-		fmt.Fprintf(&b, "command -v %s >/dev/null 2>&1 && return 0\n\t", name)
-		install := map[string]string{
-			"apt": "apt-get update && apt-get install -y", "dnf": "dnf install -y", "yum": "yum install -y",
-			"apk": "apk add", "brew": "brew install",
-		}
-		probe := map[string]string{"apt": "apt-get", "dnf": "dnf", "yum": "yum", "apk": "apk", "brew": "brew"}
-		kw := "if"
-		for _, mgr := range []string{"apt", "dnf", "yum", "apk", "brew"} {
-			pkg, ok := src.Package[mgr]
-			if !ok {
-				continue
-			}
-			fmt.Fprintf(&b, "%s command -v %s >/dev/null 2>&1; then %s %s\n\t", kw, probe[mgr], install[mgr], shQuote(pkg))
-			kw = "elif"
-		}
-		fmt.Fprintf(&b, "else echo \"no package manager this service names is here: %s\" >&2; exit 1\n\tfi\n\t", strings.Join(sortedKeys(src.Package), ", "))
-		fmt.Fprintf(&b, "BIN=%s", binDir(svc, source))
-		return b.String()
+	case SourceApt:
+		return fmt.Sprintf("command -v %s >/dev/null 2>&1 || { apt-get update && apt-get install -y %s; }\n\tBIN=%s", name, shQuote(src.Apt), binDir(svc, source))
 	}
 	return ":"
 }

@@ -143,47 +143,36 @@ func TestLeftovers_OnlyWhereTheBundleIsGoneAndItsDiskIsNot(t *testing.T) {
 	}
 }
 
-// Each source a definition names may be picked at build time, and what
-// only the machine can do is written into ctl install.
+// A definition writes one source, and what only the machine can do is
+// written into ctl install.
 func TestBuild_BinarySources(t *testing.T) {
-	defs := t.TempDir()
-	os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte(`binary:
-  name: sslocal
-  default: package
-  sources:
-    package: {apt: shadowsocks-rust, brew: shadowsocks-rust}
-    path: /opt/ss/sslocal
-    script: |
-      curl -fsSL https://example.org/sslocal -o "$BIN/sslocal"
-      chmod 755 "$BIN/sslocal"
-command: ["{bin}/sslocal", "-c", "{conf}/config.json"]
-`), 0o644)
 	for source, want := range map[string]string{
-		"":        "apt-get update && apt-get install -y 'shadowsocks-rust'",
-		"path":    "BIN='/opt/ss'",
-		"script":  `curl -fsSL https://example.org/sslocal -o "$BIN/sslocal"`,
-		"release": "",
+		"apt: shadowsocks-rust": "apt-get install -y 'shadowsocks-rust'",
+		"path: /opt/ss/sslocal": "BIN='/opt/ss'",
+		"apt: x\n  path: /y":    "",
 	} {
+		defs := t.TempDir()
+		os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte("binary:\n  name: sslocal\n  "+source+"\ncommand: [\"{bin}/sslocal\"]\n"), 0o644)
 		dst := filepath.Join(t.TempDir(), "b")
-		err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs, Source: source})
+		err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs})
 		if want == "" {
 			if err == nil {
-				t.Errorf("source %q: built from a source the definition lacks", source)
+				t.Errorf("%q: built from two sources", source)
 			}
 			continue
 		}
 		if err != nil {
-			t.Fatalf("source %q: %v", source, err)
+			t.Fatalf("%q: %v", source, err)
 		}
 		if _, err := os.Stat(filepath.Join(dst, "bin", "sslocal")); err == nil {
-			t.Errorf("source %q: the bundle carries the binary", source)
+			t.Errorf("%q: the bundle carries the binary", source)
 		}
 		ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
 		if !strings.Contains(string(ctl), want) {
-			t.Errorf("source %q: ctl lacks %q:\n%s", source, want, ctl)
+			t.Errorf("%q: ctl lacks %q:\n%s", source, want, ctl)
 		}
 		if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
-			t.Fatalf("source %q: ctl does not parse: %s", source, out)
+			t.Fatalf("%q: ctl does not parse: %s", source, out)
 		}
 	}
 }
