@@ -1,0 +1,19 @@
+# Hysteria2, the QUIC proxy server. The export renders config.yaml, whose tls
+# pair is wherever the instance says: on a machine running Caddy, Caddy's own
+# certificate, so one ACME client renews it.
+binary:
+  name: hysteria
+  # The newest GitHub release of the app, published as a bare binary.
+  release:
+    github: apernet/hysteria
+    version: latest
+    tag: app/v{version}
+    url: hysteria-{target}
+    targets:
+      darwin/arm64: darwin-arm64
+      darwin/amd64: darwin-amd64
+      linux/arm64: linux-arm64
+      linux/amd64: linux-amd64
+command: ["{bin}/hysteria", "server", "--config", "{conf}/config.yaml", "--disable-update-check"]
+# It listens on 443.
+capabilities: [CAP_NET_BIND_SERVICE]

@@ -164,6 +164,9 @@ func fetch(svc Service, platform, bin string) error {
 			return err
 		}
 	}
+	if !rel.Archive() {
+		return copyFile(archive, bin, 0o755)
+	}
 	tmp, err := os.MkdirTemp("", "rhumb-unpack-")
 	if err != nil {
 		return err
@@ -294,7 +297,8 @@ func releaseOnMachine(svc Service, platform string) string {
 	const mark = "@RHUMB_VERSION@"
 	version := shQuote(rel.Version)
 	if rel.Version == "latest" {
-		version = `$(curl -fsSL https://api.github.com/repos/` + rel.GitHub + `/releases/latest | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1)`
+		prefix, suffix, _ := strings.Cut(rel.TagPattern(), "{version}")
+		version = `$(TAG=$(curl -fsSL https://api.github.com/repos/` + rel.GitHub + `/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1); TAG=${TAG#` + shQuote(prefix) + `}; printf %s "${TAG%` + shQuote(suffix) + `}")`
 	}
 	rel.Version = mark
 	url, err := rel.URLFor(platform)
@@ -303,6 +307,10 @@ func releaseOnMachine(svc Service, platform string) string {
 	}
 	url = strings.ReplaceAll(shQuote(url), mark, `'"$VERSION"'`)
 	name := shQuote(svc.Binary.Name)
+	unpack := `tar -xf "$tmp/archive" -C "$tmp" ` + name
+	if !rel.Archive() {
+		unpack = `mv "$tmp/archive" "$tmp/"` + name
+	}
 	return strings.Join([]string{
 		`[ -x "$DIR/bin/"` + name + ` ] && return 0`,
 		`command -v curl >/dev/null 2>&1 || { echo "downloading the release needs curl" >&2; exit 1; }`,
@@ -310,7 +318,7 @@ func releaseOnMachine(svc Service, platform string) string {
 		`[ -n "$VERSION" ] || { echo "could not look up the latest release" >&2; exit 1; }`,
 		`tmp=$(mktemp -d)`,
 		`curl -fsSL ` + url + ` -o "$tmp/archive"`,
-		`tar -xf "$tmp/archive" -C "$tmp" ` + name,
+		unpack,
 		`mkdir -p "$DIR/bin" && install -m 755 "$tmp/"` + name + ` "$DIR/bin/"` + name,
 		`rm -rf "$tmp"`,
 		`echo "installed ` + svc.Binary.Name + ` $VERSION"`,

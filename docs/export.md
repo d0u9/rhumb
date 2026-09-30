@@ -821,6 +821,9 @@ A service's deploy definition names where its program comes from under
   leaves that to `ctl install`, which needs `curl` and the network on the
   machine. With `github: owner/repo`, `version: latest` is the newest release,
   looked up when it is downloaded, and `url` may be only the asset's name.
+  `tag` is the release's tag around `{version}`, `v{version}` by default
+  (Hysteria's is `app/v{version}`). A `url` naming no tar archive is the
+  binary itself.
 - `apt` is the package `ctl install` installs with apt, when the program is
   not on the machine already.
 - `path` is where it already is on the machine; nothing installs it.
