@@ -52,7 +52,7 @@ func TestBuild_WritesABundleThatKeepsVar(t *testing.T) {
 		}
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
-	if !strings.Contains(string(ctl), `set -- "$DIR/bin"'/sslocal' '-c' "$DIR/conf"'/config.json'`) {
+	if !strings.Contains(string(ctl), `set -- "$BIN"'/sslocal' '-c' "$DIR/conf"'/config.json'`) {
 		t.Errorf("ctl command line:\n%s", ctl)
 	}
 	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
@@ -140,5 +140,61 @@ func TestLeftovers_OnlyWhereTheBundleIsGoneAndItsDiskIsNot(t *testing.T) {
 	}
 	if strings.Join(names, " ") != "launchd:rhumb.n.gone.plist shim:gone" {
 		t.Errorf("got %v", names)
+	}
+}
+
+// Each source a definition names may be picked at build time, and what
+// only the machine can do is written into ctl install.
+func TestBuild_BinarySources(t *testing.T) {
+	defs := t.TempDir()
+	os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte(`binary:
+  name: sslocal
+  default: package
+  sources:
+    package: {apt: shadowsocks-rust, brew: shadowsocks-rust}
+    path: /opt/ss/sslocal
+    script: |
+      curl -fsSL https://example.org/sslocal -o "$BIN/sslocal"
+      chmod 755 "$BIN/sslocal"
+command: ["{bin}/sslocal", "-c", "{conf}/config.json"]
+`), 0o644)
+	for source, want := range map[string]string{
+		"":        "apt-get update && apt-get install -y 'shadowsocks-rust'",
+		"path":    "BIN='/opt/ss'",
+		"script":  `curl -fsSL https://example.org/sslocal -o "$BIN/sslocal"`,
+		"release": "",
+	} {
+		dst := filepath.Join(t.TempDir(), "b")
+		err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs, Source: source})
+		if want == "" {
+			if err == nil {
+				t.Errorf("source %q: built from a source the definition lacks", source)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("source %q: %v", source, err)
+		}
+		if _, err := os.Stat(filepath.Join(dst, "bin", "sslocal")); err == nil {
+			t.Errorf("source %q: the bundle carries the binary", source)
+		}
+		ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("source %q: ctl lacks %q:\n%s", source, want, ctl)
+		}
+		if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
+			t.Fatalf("source %q: ctl does not parse: %s", source, out)
+		}
+	}
+}
+
+func TestRelease_GitHubAssetName(t *testing.T) {
+	r := Release{GitHub: "o/r", Version: "2.1.0", URL: "p-v{version}-{target}.tar.gz", Targets: map[string]string{"linux/amd64": "x86_64"}}
+	got, err := r.URLFor("linux/amd64")
+	if err != nil || got != "https://github.com/o/r/releases/download/v2.1.0/p-v2.1.0-x86_64.tar.gz" {
+		t.Fatalf("URLFor = %q, %v", got, err)
+	}
+	if _, err := r.URLFor("darwin/arm64"); err == nil {
+		t.Fatal("a platform without a build gave a URL")
 	}
 }
