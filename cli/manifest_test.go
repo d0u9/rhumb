@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"github.com/d0u9/rhumb/deploy"
 	"github.com/d0u9/rhumb/engine"
 	"os"
 	"path"
@@ -66,6 +67,12 @@ func checkManifests(t *testing.T, files map[string]string, wantAtLeast int) {
 				t.Errorf("%s: host instance renders a compose.yaml", p)
 			}
 			continue
+		}
+		if man.Container != nil {
+			if ok {
+				t.Errorf("%s: a docker.yaml service renders a compose.yaml of its own", p)
+			}
+			compose, ok = composeFromManifest(t, body), true
 		}
 		if !ok {
 			continue
@@ -164,6 +171,25 @@ func compareCompose(man engine.DeployManifest, body string) []string {
 	return problems
 }
 
+// composeFromManifest is what rhumb deploy writes for a manifest's
+// container.
+func composeFromManifest(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(path.Join(dir, deploy.ManifestFile), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := deploy.ReadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := deploy.Compose(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
 // volumeString is a compose volume as its short form, source:target, so a
 // long-form entry compares against the manifest the same way.
 func volumeString(n yaml.Node) string {
@@ -185,9 +211,11 @@ func TestManifest_ExampleContent(t *testing.T) {
 		"service: microbin\n",
 		"runtime: docker\n",
 		"  - path: server.env\n",
-		"  - path: compose.yaml\n",
+		"    place: server.env\n",
 		"      - 127.0.0.1\n",
+		"    transport: tcp\n",
 		"  image: danielszabo99/microbin:2.0.4\n",
+		"    data: /var/lib/microbin/data_dir\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("microbin manifest has no %q:\n%s", want, got)

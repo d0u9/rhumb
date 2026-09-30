@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+
 	"github.com/d0u9/rhumb/confgen"
 	"github.com/d0u9/rhumb/derive"
 	"github.com/d0u9/rhumb/inventory"
@@ -19,7 +21,14 @@ type Loaded struct {
 	// declare one, keyed by service name. Most services declare none.
 	Deploys    map[string]confgen.Deploy
 	DeployDirs map[string]string
-	Derived    *derive.Model
+	// Dockers holds the docker.yaml of the services that declare one: how
+	// the deployment tool starts their containers.
+	Dockers map[string]confgen.Docker
+	// ServiceProblems names every service deployment file that would not
+	// parse, which check reports; the service renders its configuration
+	// regardless.
+	ServiceProblems []string
+	Derived         *derive.Model
 }
 
 // Load reads rootPath's inventory and services/, and derives from both.
@@ -40,7 +49,17 @@ func Load(rootPath string) (Loaded, error) {
 	serviceDirs := map[string]string{}
 	deploys := map[string]confgen.Deploy{}
 	deployDirs := map[string]string{}
+	dockers := map[string]confgen.Docker{}
 	for _, svc := range confRoot.Services {
+		if svc.DeployBroken != "" {
+			l.ServiceProblems = append(l.ServiceProblems, fmt.Sprintf("service %s: %s", svc.Name, svc.DeployBroken))
+		}
+		if svc.DockerBroken != "" {
+			l.ServiceProblems = append(l.ServiceProblems, fmt.Sprintf("service %s: %s", svc.Name, svc.DockerBroken))
+		}
+		if svc.Docker != nil {
+			dockers[svc.Name] = *svc.Docker
+		}
 		if svc.Broken == "" {
 			manifests[svc.Name] = svc.Manifest
 			serviceDirs[svc.Name] = svc.Dir
@@ -54,6 +73,7 @@ func Load(rootPath string) (Loaded, error) {
 	l.ServiceDirs = serviceDirs
 	l.Deploys = deploys
 	l.DeployDirs = deployDirs
+	l.Dockers = dockers
 
 	// An export is keyed by the service it writes out as well as its own
 	// name: two services may both offer a "link", and they are two exports

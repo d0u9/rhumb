@@ -126,12 +126,11 @@ instances:
       auth_enabled: false
       admin_enabled: true
       upload_enabled: true
-    # What starting the container needs beyond the model, laid over
-    # services/microbin/deploy/defaults.yaml key by key. dgs reads no key of
-    # it: the deploy template does. The port mapping is not here — it is
-    # derived from `ports` above and from the edges into that port, which is
-    # what the second file is generated for — and neither is any credential,
-    # since the rendered server.env beside it carries those.
+    # What starting the container needs beyond the model, laid over the
+    # defaults in services/microbin/docker.yaml key by key: a machine that
+    # keeps its services elsewhere names its own `dir`. The port mapping is
+    # not here — it is derived from `ports` above and from the edges into
+    # that port — and neither is any credential, since the rendered
+    # server.env carries those.
     deploy:
-      volumes:
-        - microbin-data:/var/lib/microbin/data_dir
+      dir: /srv/microbin-sea01

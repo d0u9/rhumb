@@ -1,0 +1,27 @@
+# How MicroBin runs in a container. rhumb deploy generates the compose file
+# from this and the instance's `deploy`; nothing here is a template of it.
+#
+# Every string value may be an expression rendered with the instance's view,
+# as a configuration template is; nothing else may.
+
+# Each port the service listens on, and its transport. The addresses it is
+# published at are derived from the edges into it, never written here.
+ports:
+  web: tcp
+
+# The rendered configuration is the container's environment. An env file is
+# installed 0600: it holds every password, and only the runtime reads it.
+files:
+  server.env: {env_file: true}
+
+# What MicroBin keeps between runs: pastes and uploads. A named volume, so
+# reinstalling replaces the container and leaves this alone.
+state:
+  data: {target: /var/lib/microbin/data_dir, named: true}
+
+# What an instance's `deploy` overrides key by key. The image tag is the
+# clear case for writing one here and overriding it on a machine that has
+# not been updated yet.
+defaults:
+  image: danielszabo99/microbin:2.0.4
+  restart: unless-stopped

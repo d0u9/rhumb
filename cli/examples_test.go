@@ -182,27 +182,30 @@ func TestExamples_ProfilesListenWhereTheirValuesSay(t *testing.T) {
 	}
 }
 
-// TestExamples_ContainerisedInstanceRendersItsDeploymentFile is the second
-// file, end to end: the example MicroBin runs in a container, so it renders
-// a compose.yaml beside its server.env. The port mapping in it is derived —
-// the port is entered only by the Caddy on its own machine, so it publishes
-// on loopback — and the number is the same one the configuration was
-// rendered from.
-func TestExamples_ContainerisedInstanceRendersItsDeploymentFile(t *testing.T) {
+// TestExamples_ContainerisedInstanceComposesFromItsManifest is a
+// docker.yaml service end to end: the example MicroBin runs in a container,
+// so its manifest says how, and the compose file is generated from that
+// manifest alone. The port mapping in it is derived — the port is entered
+// only by the Caddy on its own machine, so it publishes on loopback — and
+// the number is the same one the configuration was rendered from.
+func TestExamples_ContainerisedInstanceComposesFromItsManifest(t *testing.T) {
 	files := renderExamples(t)
-	got := exampleFile(t, files, "microbin-sea01/compose.yaml")
+	if _, ok := files["sea1/microbin/microbin-sea01/compose.yaml"]; ok {
+		t.Error("a docker.yaml service rendered a compose.yaml of its own")
+	}
+	got := composeFromManifest(t, exampleFile(t, files, "microbin-sea01/manifest.yaml"))
 
 	for _, want := range []string{
-		`- "127.0.0.1:8080:8080"`,
-		"image: danielszabo99/microbin:2.0.4",        // the service's deployment defaults
-		"- microbin-data:/var/lib/microbin/data_dir", // the instance's own deploy values
-		"- server.env",                               // the credential stays in the file beside it
+		"- 127.0.0.1:8080:8080/tcp",
+		"image: danielszabo99/microbin:2.0.4", // the service's docker.yaml defaults
+		"- /srv/microbin-sea01/server.env",    // the credential stays in the file beside it
+		"target: /var/lib/microbin/data_dir",  // its state
 	} {
 		if !strings.Contains(got, want) {
-			t.Errorf("rendered compose.yaml has no %q:\n%s", want, got)
+			t.Errorf("composed file has no %q:\n%s", want, got)
 		}
 	}
-	// The deployment file carries no credential: what MicroBin's own
+	// The compose file carries no credential: what MicroBin's own
 	// configuration holds does not cross into it.
 	env := exampleFile(t, files, "microbin-sea01/server.env")
 	for _, line := range strings.Split(env, "\n") {
@@ -211,7 +214,7 @@ func TestExamples_ContainerisedInstanceRendersItsDeploymentFile(t *testing.T) {
 			continue
 		}
 		if strings.Contains(got, value) {
-			t.Errorf("rendered compose.yaml carries %s from server.env", name)
+			t.Errorf("composed file carries %s from server.env", name)
 		}
 	}
 }
@@ -221,7 +224,7 @@ func TestExamples_ContainerisedInstanceRendersItsDeploymentFile(t *testing.T) {
 // for it. The containerised ones are named, so adding a container to the
 // examples without meaning to still fails here.
 func TestExamples_AHostProcessRendersOneFile(t *testing.T) {
-	containerised := []string{"microbin-sea01", "samba-nas"}
+	containerised := []string{"samba-nas"}
 	files := renderExamples(t)
 	for path := range files {
 		if !strings.HasSuffix(path, "compose.yaml") {
@@ -244,7 +247,9 @@ func TestExamples_AHostProcessRendersOneFile(t *testing.T) {
 // puts the rendered configuration where the runtime expects it and starts
 // it. Both come from one render, so the script reaches the same deploy
 // values as the compose file, and it is written executable because its
-// output name ends in .sh — nothing declares a mode.
+// output name ends in .sh — nothing declares a mode. It is a deploy/
+// service's: one holding a docker.yaml renders neither file, see
+// TestExamples_ContainerisedInstanceComposesFromItsManifest.
 func TestExamples_DeploymentWritesTheScriptThatPutsItInPlace(t *testing.T) {
 	root, secretsDir := examplesRoot(t)
 	dest := t.TempDir()
@@ -257,9 +262,9 @@ func TestExamples_DeploymentWritesTheScriptThatPutsItInPlace(t *testing.T) {
 	var script, compose string
 	for _, path := range filesUnder(t, dest) {
 		switch {
-		case strings.HasSuffix(path, "microbin-sea01/install.sh"):
+		case strings.HasSuffix(path, "samba-nas/install.sh"):
 			script = path
-		case strings.HasSuffix(path, "microbin-sea01/compose.yaml"):
+		case strings.HasSuffix(path, "samba-nas/compose.yaml"):
 			compose = path
 		}
 	}
@@ -291,8 +296,7 @@ func TestExamples_DeploymentWritesTheScriptThatPutsItInPlace(t *testing.T) {
 	got := string(data)
 	for _, want := range []string{
 		"#!/bin/sh",
-		"/srv/microbin-sea01",  // the deploy value the script places under
-		"docker compose up -d", // and the one that starts it
+		"docker compose -f", // what starts it
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("install.sh has no %q:\n%s", want, got)

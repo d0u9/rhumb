@@ -768,8 +768,8 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			continue
 		}
 		if !manifests[inst.Service].Deploys {
-			add("instance %q writes deploy values, and service %q holds no %s/ directory to render them",
-				id, inst.Service, confgen.DeployDir)
+			add("instance %q writes deploy values, and service %q holds neither a %s/ directory nor a %s to start it from",
+				id, inst.Service, confgen.DeployDir, confgen.DockerFilename)
 		}
 		if !inst.Containerised() {
 			add("instance %q writes deploy values and runs as a %s process, which renders no deployment file",

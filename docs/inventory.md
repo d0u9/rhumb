@@ -1016,19 +1016,31 @@ made of. They go in `deploy`:
         published: clip.home.lan
     deploy:
       image: danielszabo99/microbin:2.0.4
-      restart: unless-stopped
+      dir: /srv/microbin
       volumes:
-        - microbin-data:/var/lib/microbin/data_dir
+        - {source: /srv/uploads, target: /uploads}
 ```
 
-`deploy` is opaque, exactly as [`values`](#an-instances-own-values) is: rhumb
-parses it as YAML, knows no key in it, and hands it to the service's
-[deploy templates](export.md#a-second-file-what-deploys-it) — the compose file
-and the script that puts the configuration in place read the same mapping. It is
-a second
-mapping rather than a corner of `values` because the two have different readers
-— `values` configures the program, `deploy` starts it — and a key that reached
-both would be one more place a rename has to be chased.
+For a service holding a [`docker.yaml`](export.md#how-a-container-is-started-dockeryaml),
+`deploy` is a fixed set of keys, because the deployment tool reads every one of
+them: `image`, `restart`, `dir` (the instance's directory on the machine, and
+its compose project's name; `/srv/docker/<service>` by default),
+`container_name`, `hostname`, `account` (a name in the node's `accounts`, the
+container runs as its uid), `dns`, and `volumes`. A volume is
+`{source, target, ro, propagation}`; one whose source is not the instance's own
+directory is never created, since creating a mount point on a machine whose
+disk is not mounted writes to the wrong disk. The service's `docker.yaml`
+gives the defaults, and an instance's `deploy` lays over them key by key — a
+list replaces a list, so the service's own mounts are in `docker.yaml`, not
+in its `defaults`.
+
+For a service holding a `deploy/` directory instead, `deploy` is opaque,
+exactly as [`values`](#an-instances-own-values) is: rhumb parses it as YAML,
+knows no key in it, and hands it to the service's
+[deploy templates](export.md#a-second-file-what-deploys-it). Either way it is a
+second mapping rather than a corner of `values` because the two have different
+readers — `values` configures the program, `deploy` starts it — and a key that
+reached both would be one more place a rename has to be chased.
 
 **Ports are not in it.** The mapping a container publishes is derived from
 `ports` and from the edges the model already resolves: a port its own node
@@ -1040,15 +1052,12 @@ is worth generating at all, so writing a port here would give back the second
 truth it removes. See
 [what deploys it](export.md#a-second-file-what-deploys-it).
 
-**Secrets are not in it either.** The deploy file names the rendered
+**Secrets are not in it either.** The deployment names the rendered
 configuration beside it; the credential stays in that file, and nothing about
 rotation changes.
 
-A service holding no `deploy/` directory renders its configuration alone, and an
-instance of it writing `deploy` is an error rather than a mapping nothing reads. What every
-instance of a service deploys with — its image, most of all — belongs in
-`deploy/defaults.yaml`, and an instance's `deploy` lays over it key by key, the
-way `values` lays over `defaults.yaml`.
+A service holding neither renders its configuration alone, and an instance of
+it writing `deploy` is an error rather than a mapping nothing reads.
 
 ### Names on a network
 
@@ -2518,9 +2527,12 @@ failing can be told which level it was reading.
     the port.
 23. An instance's `runtime`, after it takes its node's, is `host`, `docker`
     or `podman`. The error lists the three.
-24. An instance writing `deploy` names a service holding a `deploy/` directory,
-    and its `runtime` is not `host`. A container's deployment file is what the
-    key is for, and a host process writing one renders nothing.
+24. An instance writing `deploy` names a service holding a `docker.yaml` or a
+    `deploy/` directory, and its `runtime` is not `host`. A container's
+    deployment is what the key is for, and a host process writing one starts
+    nothing. For a `docker.yaml` service, `deploy` holds only the keys the
+    deployment tool reads: `image`, `restart`, `dir`, `container_name`,
+    `hostname`, `account`, `dns`, `volumes`. `rhumb check` names any other.
 25. No `deploy` mapping writes a port mapping or a secret. Both are derived or
     live in the rendered configuration, and a second spelling of either is the
     thing the second file exists to remove. The error names the key.

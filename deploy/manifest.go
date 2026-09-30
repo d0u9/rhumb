@@ -34,7 +34,12 @@ type Manifest struct {
 	Files    []struct {
 		Path       string `yaml:"path"`
 		Executable bool   `yaml:"executable"`
+		Place      string `yaml:"place"`
+		Mode       string `yaml:"mode"`
 	} `yaml:"files"`
+	Ports     []Port     `yaml:"ports"`
+	Networks  []Network  `yaml:"networks"`
+	Container *Container `yaml:"container"`
 }
 
 // ReadManifest reads the manifest of the exported instance in dir.

@@ -35,11 +35,19 @@ type DeployManifest struct {
 	Networks []manifestNetwork          `yaml:"networks,omitempty"`
 	Accounts map[string]manifestAccount `yaml:"accounts,omitempty"`
 	Deploy   map[string]any             `yaml:"deploy,omitempty"`
+	// Container is how a containerised instance of a service holding a
+	// docker.yaml is started.
+	Container *manifestContainer `yaml:"container,omitempty"`
 }
 
 type manifestFile struct {
 	Path       string `yaml:"path"`
 	Executable bool   `yaml:"executable,omitempty"`
+	// Place is where a container's file is installed: relative to the
+	// container's dir, or an absolute path on the machine. Empty with Mode
+	// set means the file is not installed.
+	Place string `yaml:"place,omitempty"`
+	Mode  string `yaml:"mode,omitempty"`
 }
 
 type manifestPort struct {
@@ -48,6 +56,7 @@ type manifestPort struct {
 	Bind      []string `yaml:"bind"`
 	HostPort  int      `yaml:"host_port,omitempty"`
 	Published string   `yaml:"published,omitempty"`
+	Transport string   `yaml:"transport,omitempty"`
 }
 
 type manifestNetwork struct {
@@ -157,6 +166,12 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		}
 		if len(values) > 0 {
 			man.Deploy = values
+		}
+	}
+
+	if docker, ok := m.Data.Dockers[t.Service]; ok && inst.Containerised() {
+		if err := m.containerFor(instance, *inst, node, docker, &man); err != nil {
+			return nil, err
 		}
 	}
 
