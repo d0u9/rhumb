@@ -107,6 +107,15 @@ func Build(src, dst string, opt Options) error {
 	if err := copyFile(filepath.Join(src, ManifestFile), filepath.Join(dst, ManifestFile), 0o600); err != nil {
 		return err
 	}
+	ships, err := shipped(m.Service)
+	if err != nil {
+		return err
+	}
+	for name, data := range ships {
+		if err := os.WriteFile(filepath.Join(dst, "bin", name), data, 0o755); err != nil {
+			return err
+		}
+	}
 	download := downloadFor(m, opt)
 	source := svc.Source()
 	bin := filepath.Join(dst, "bin", svc.Binary.Name)
@@ -191,10 +200,11 @@ func fetch(svc Service, platform, bin string) error {
 	defer os.RemoveAll(tmp)
 	// tar reads every format a release comes in, xz included, without this
 	// program carrying a decompressor for each.
-	if out, err := exec.Command("tar", "-xf", archive, "-C", tmp, svc.Binary.Name).CombinedOutput(); err != nil {
+	member := rel.MemberFor(platform, svc.Binary.Name)
+	if out, err := exec.Command("tar", "-xf", archive, "-C", tmp, member).CombinedOutput(); err != nil {
 		return fmt.Errorf("unpacking %s: %v: %s", filepath.Base(archive), err, out)
 	}
-	return copyFile(filepath.Join(tmp, svc.Binary.Name), bin, 0o755)
+	return copyFile(filepath.Join(tmp, filepath.FromSlash(member)), bin, 0o755)
 }
 
 func download(url, to string) error {
@@ -264,6 +274,7 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
 		"Capabilities": strings.Join(svc.Capabilities, " "),
+		"Requires":     strings.Join(svc.Requires, " "),
 		"HookStart":    shellArgs(svc.Hooks.Start), "HookStop": shellArgs(svc.Hooks.Stop),
 		"Dir": installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
@@ -374,7 +385,11 @@ func releaseOnMachine(svc Service, platform string) string {
 	}
 	url = strings.ReplaceAll(shQuote(url), mark, `'"$VERSION"'`)
 	name := shQuote(svc.Binary.Name)
-	unpack := `tar -xf "$tmp/archive" -C "$tmp" ` + name
+	member := strings.ReplaceAll(shQuote(rel.MemberFor(platform, svc.Binary.Name)), mark, `'"$VERSION"'`)
+	unpack := `tar -xf "$tmp/archive" -C "$tmp" ` + member + ` && mv "$tmp/"` + member + ` "$tmp/"` + name
+	if rel.Member == "" {
+		unpack = `tar -xf "$tmp/archive" -C "$tmp" ` + name
+	}
 	if !rel.Archive() {
 		unpack = `mv "$tmp/archive" "$tmp/"` + name
 	}
