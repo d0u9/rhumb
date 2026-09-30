@@ -53,6 +53,11 @@ func Export(in io.Reader, out io.Writer, args []string, flags map[string]string,
 	if err != nil {
 		return err
 	}
+	// A profile's program over some of its routes is rendered with only
+	// those, this time.
+	if r.Routes, err = target.Routes(selector, matched); err != nil {
+		return err
+	}
 
 	var instances []string
 	var broken []string

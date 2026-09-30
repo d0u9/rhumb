@@ -672,6 +672,8 @@ they are flat:
 | `secret` | The instance's own secret of a given name, narrowed by further arguments: a key for a `set` name, a field for a name with `fields`, both for a name with both. Given fewer arguments than the name has levels, it returns the map of what is under it. |
 
 | `mapping` | Where a container runtime publishes one of this instance's ports on the machine it runs on: `.Addresses`, one per network it is reached over, and `.Number`. Both are derived, and it is read only in a [deploy template](#a-second-file-what-deploys-it) — every other render is handed none. |
+| `upstreams` | Every upstream of a program that is one process over several routes — a device profile that `runs` it — each resolved as `upstream` is, with `route` and `service` (what it authenticates against) beside. With one route, `upstream` is that one too; with more, `upstream` fails naming them, so a program that takes one says so where it is rendered. |
+| `replace` | Every occurrence of a string replaced, for a value two programs write differently — a port range `first-last` in the inventory is `first:last` to sing-box. |
 | `published` | The name one of this instance's own ports answers to, by port name, or empty. A service behind a reverse proxy renders the same string the proxy matches its site block on — `DOMAIN=https://{{ published "web" }}` — so the two cannot disagree. See [the name a port is published at](inventory.md#the-name-a-port-is-published-at). |
 
 Beside them, one accessor per datasource — `defaults`, `node`, `instance`,
@@ -808,6 +810,18 @@ otherwise, and install only puts the program in place and links its commands:
 nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
 `ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
 disable` takes that back. Either way launchd restarts it when it exits.
+
+A device profile that `runs` a program is one instance and one bundle,
+whatever routes it takes; its manifest names the `profile` and the `routes`
+its configuration was rendered with. The export narrows those routes with
+`route:` terms in the selector — `node:laptop profile:singbox route:sea-hy2` is
+the same program over only that route, this once.
+
+A definition may ship files beside its YAML, in `services/<name>/`; they are
+put in the bundle's `bin/`. `requires` names programs the machine must have,
+which install checks for; a launchd plist keeps the `$PATH` it was written
+with, so a program found through a version manager is found again. A release
+whose binary is not at the top of its archive names it with `member`.
 
 A definition may name `hooks`, a `start` and a `stop` command that systemd
 runs as root, before the program starts and after it stops; uninstall runs

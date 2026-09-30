@@ -171,7 +171,7 @@ func TestDerive_ExportInstances(t *testing.T) {
 
 	// A route with no ReachedBy still grants, but derives no instance.
 	for _, ci := range m.ExportInstances {
-		if ci.Route == "bin" {
+		if containsString(ci.Routes, "bin") {
 			t.Fatalf("ExportInstance %+v derived for a role with no ReachedBy", ci)
 		}
 	}
@@ -300,7 +300,7 @@ func TestDerive_ClientNarrowsToOneForm(t *testing.T) {
 		t.Fatalf("phone-sea-ssserver-ss-link.Service = %q, want the one form the device asked for", phoneSEA.Export)
 	}
 	for _, ci := range m.ExportInstances {
-		if ci.Node == "phone" && ci.Route == "sea" && ci.Export != "ss-link" {
+		if ci.Node == "phone" && containsString(ci.Routes, "sea") && ci.Export != "ss-link" {
 			t.Fatalf("phone also derived %q, want only the form it asked for", ci.Export)
 		}
 	}
@@ -436,7 +436,7 @@ func TestDerive_TwoDevicesOneCredentialShareOneSecret(t *testing.T) {
 	// configuration.
 	var files []string
 	for _, ci := range m.ExportInstances {
-		if ci.Node != "" && ci.Route == "sea" {
+		if ci.Node != "" && containsString(ci.Routes, "sea") {
 			files = append(files, ci.ID)
 		}
 	}
@@ -521,7 +521,7 @@ func TestDerive_CredentialNoDeviceNamesIsTheirsToCarry(t *testing.T) {
 	// The device carries the one it names; the person carries the other.
 	var ids []string
 	for _, ci := range m.ExportInstances {
-		if ci.Route == "sea" && (ci.User == "dana" || ci.Node == "macbook") {
+		if containsString(ci.Routes, "sea") && (ci.User == "dana" || ci.Node == "macbook") {
 			ids = append(ids, ci.ID)
 		}
 	}
@@ -629,7 +629,7 @@ func TestDerive_CredentialNarrowedToFewerRoutes(t *testing.T) {
 
 	// The device carrying it takes no file on the route it cannot open.
 	for _, ci := range m.ExportInstances {
-		if ci.Node == "macbook" && ci.Route == "jp" {
+		if ci.Node == "macbook" && containsString(ci.Routes, "jp") {
 			t.Fatalf("macbook has %s, but its credential does not open jp", ci.ID)
 		}
 	}
@@ -724,7 +724,7 @@ func TestDerive_ForwarderIsDialedAndTheHopBehindItIsAuthenticatedAgainst(t *test
 	// imports a share URI for a program that reads nothing.
 	var found *ExportInstance
 	for i := range m.ExportInstances {
-		if m.ExportInstances[i].Route == "sea-via-tzr" {
+		if containsString(m.ExportInstances[i].Routes, "sea-via-tzr") {
 			found = &m.ExportInstances[i]
 			break
 		}

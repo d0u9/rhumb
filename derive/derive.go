@@ -97,7 +97,10 @@ type ExportInstance struct {
 	// export directory the name refers to.
 	Service string
 	Export  string
-	Route   string
+	// Routes are the routes this instance's upstreams are: one for a file
+	// a person carries, and every route a profile's access opens for a
+	// profile that runs a program, which is one process over all of them.
+	Routes []string
 	// Credential is the owner's credential this instance authenticates
 	// with. Two devices may name the same one.
 	Credential string
@@ -200,6 +203,9 @@ type use struct {
 	export  string
 	values  map[string]any
 	access  []string
+	runs    string
+	bind    string
+	ports   inventory.Ports
 }
 
 // usesOf is the device itself when it declares no profiles, and each of its
@@ -211,7 +217,7 @@ func usesOf(n inventory.Node) []use {
 	out := make([]use, 0, len(n.Profiles))
 	for _, name := range n.ProfileNames() {
 		p := n.Profiles[name]
-		out = append(out, use{profile: name, export: p.Export, values: p.Values, access: p.Access})
+		out = append(out, use{profile: name, export: p.Export, values: p.Values, access: p.Access, runs: p.Runs, bind: p.Bind, ports: p.Ports})
 	}
 	return out
 }
@@ -396,6 +402,46 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 					if len(use.access) > 0 && !containsString(use.access, routeName) {
 						continue
 					}
+					// A profile that runs a program is that one process:
+					// one instance of the program's service, whose
+					// upstreams are every route it opens, each an edge.
+					// The program's own service renders its configuration;
+					// the terminal's exports are for files a person carries.
+					if use.runs != "" {
+						derivedID := nodeID + "-" + use.profile
+						found := false
+						for i := range m.ExportInstances {
+							if m.ExportInstances[i].ID == derivedID {
+								m.ExportInstances[i].Routes = append(m.ExportInstances[i].Routes, routeName)
+								found = true
+							}
+						}
+						if !found {
+							ci := ExportInstance{
+								ID: derivedID, Node: nodeID, Credential: credential,
+								Service: use.runs, Routes: []string{routeName},
+								Profile: use.profile, Values: use.values,
+								Ports: use.ports, Bind: use.bind,
+							}
+							for _, override := range n.Instances {
+								if inventory.LocalName(override.ID) == derivedID {
+									ci.Ports, ci.Bind = override.Ports, override.Bind
+									ci.Values = overlay(override.Values, use.values)
+									break
+								}
+							}
+							m.ExportInstances = append(m.ExportInstances, ci)
+						}
+						address, network, err := resolveAddress(n, entry.node, inv.Networks, inv.Universal)
+						if err != nil {
+							return nil, fmt.Errorf("derive: route %q for %s: %w", routeName, nodeID, err)
+						}
+						m.Edges = append(m.Edges, Edge{
+							Route: routeName, FromInstance: derivedID, To: entryHop, Terminal: terminalHop,
+							Address: address, Network: network, Port: entry.inst.Ports[entryHop.Port].Number,
+						})
+						continue
+					}
 					for _, export := range narrowExports(exports, use.export) {
 						derivedID := nodeID + "-" + inventory.FlatID(routeName) + "-" + terminal.inst.Service + "-" + export
 						if use.profile != "" {
@@ -403,7 +449,7 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 						}
 						ci := ExportInstance{
 							ID: derivedID, Node: nodeID, Credential: credential,
-							Service: terminal.inst.Service, Export: export, Route: routeName,
+							Service: terminal.inst.Service, Export: export, Routes: []string{routeName},
 							Profile: use.profile, Values: use.values,
 						}
 						for _, override := range n.Instances {
@@ -454,7 +500,7 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 						Credential: credential,
 						Service:    terminal.inst.Service,
 						Export:     export,
-						Route:      routeName,
+						Routes:     []string{routeName},
 					})
 					// A file not tied to a device reaches the universal
 					// network and the networks its credential names in

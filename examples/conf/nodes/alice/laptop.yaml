@@ -29,9 +29,12 @@ credential: laptop
 #            profile's file name wins over them key by key.
 #   access   the routes this profile covers, among those the laptop's
 #            credential opens. Unwritten, all of them.
-#   runs     the service whose program runs this file on the laptop. Written,
-#            the export adds a manifest.yaml a deployment tool installs it
-#            from. Unwritten, the file is for a person.
+#   runs     the service whose program this profile is. Written, the profile
+#            is one process of that service — one instance, whatever routes
+#            its access opens, each an upstream — rendered by the service's
+#            own template from `bind` and `ports`, with a manifest.yaml a
+#            deployment tool installs it from; it takes no `export`.
+#            Unwritten, the profile is files for a person, one per route.
 #
 # A device with profiles does not also write `export`: each profile says its
 # own. Hand over one with `rhumb export node:laptop profile:singbox`.
@@ -40,8 +43,10 @@ profiles:
     export: json
     values:
       local_port: 2080
+  # One process of sslocal, rendered by its own service like any sslocal
+  # instance: it listens where bind and ports say.
   browser:
-    export: json
     runs: sslocal
-    values:
-      local_port: 1080
+    bind: 127.0.0.1
+    ports:
+      socks: 1080

@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/d0u9/rhumb/confgen"
+	"github.com/d0u9/rhumb/derive"
 	"github.com/d0u9/rhumb/inventory"
 	"github.com/d0u9/rhumb/render"
 )
@@ -32,7 +33,11 @@ type DeployManifest struct {
 	Runtime  string `yaml:"runtime"`
 	Platform string `yaml:"platform,omitempty"`
 	Download string `yaml:"download,omitempty"`
-	Root     string `yaml:"root,omitempty"`
+	// Profile is the device profile whose program this is, and Routes the
+	// routes it was rendered with: its upstreams, each an outbound.
+	Profile string   `yaml:"profile,omitempty"`
+	Routes  []string `yaml:"routes,omitempty"`
+	Root    string   `yaml:"root,omitempty"`
 	// Dir is where a host instance is installed on the machine.
 	Dir      string                     `yaml:"dir,omitempty"`
 	Files    []manifestFile             `yaml:"files"`
@@ -86,7 +91,7 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	if t.Export != "" {
+	if m.InstanceByID(instance) == nil {
 		return m.profileManifest(instance, t, files)
 	}
 	inst := m.InstanceByID(instance)
@@ -205,32 +210,37 @@ func encodeManifest(instance string, man DeployManifest) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// profileManifest is the manifest of a device profile that names the program
-// running its file, and nil for every other derived file, which is for a
-// person. The profile's file is that program's whole configuration on the
-// device: the program listens where the file says, so the manifest carries
-// no ports, networks or accounts.
+// profileManifest is the manifest of a device profile that runs a program,
+// and nil for every other derived file, which is for a person. The profile
+// is one process: its configuration is its whole setup on the device, so
+// the manifest carries no ports, networks or accounts, and names the routes
+// the configuration was rendered with.
 func (m Renderer) profileManifest(instance string, t targetRef, files []artefact) ([]byte, error) {
-	var runs string
-	for _, ci := range m.Data.Derived.ExportInstances {
-		if ci.ID != instance || ci.Profile == "" {
-			continue
-		}
-		for _, n := range m.Data.Inv.Nodes {
-			if n.Broken == "" && n.ID == ci.Node {
-				runs = n.Profiles[ci.Profile].Runs
-			}
+	var ci *derive.ExportInstance
+	for i := range m.Data.Derived.ExportInstances {
+		if c := &m.Data.Derived.ExportInstances[i]; c.ID == instance && c.Profile != "" && c.Export == "" {
+			ci = c
 		}
 	}
-	if runs == "" {
+	if ci == nil {
 		return nil, nil
+	}
+	var node inventory.Node
+	for _, n := range m.Data.Inv.Nodes {
+		if n.Broken == "" && n.ID == ci.Node {
+			node = n
+		}
 	}
 	man := DeployManifest{
 		Schema:   ManifestSchema,
 		Node:     t.Node,
 		Instance: inventory.LocalName(instance),
-		Service:  runs,
+		Service:  ci.Service,
 		Runtime:  inventory.RuntimeHost,
+		Platform: node.Platform,
+		Download: node.Download,
+		Profile:  ci.Profile,
+		Routes:   m.routesOf(instance),
 		Files:    make([]manifestFile, 0, len(files)),
 	}
 	for _, f := range files {

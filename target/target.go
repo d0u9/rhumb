@@ -99,7 +99,7 @@ func List(inv *inventory.Root, model *derive.Model) []Target {
 			Export:   ci.Export,
 			Profile:  ci.Profile,
 			Instance: ci.ID,
-			Routes:   []string{ci.Route},
+			Routes:   ci.Routes,
 		})
 	}
 
@@ -234,6 +234,44 @@ func Match(selector string, targets []Target) ([]Target, error) {
 		return nil, fmt.Errorf("selector %q matches nothing", selector)
 	}
 	return matched, nil
+}
+
+// Routes is how a selector narrows the routes of the targets it matched:
+// for each matched target that is one process over several routes — a
+// device profile that runs a program — the routes its route: terms name,
+// when the selector has any. A target it does not narrow is absent, and is
+// rendered with every route it takes.
+func Routes(selector string, matched []Target) (map[string][]string, error) {
+	terms, err := ParseSelector(selector)
+	if err != nil {
+		return nil, fmt.Errorf("selector %q: %w", selector, err)
+	}
+	var routeTerms []Term
+	for _, term := range terms {
+		if term.Field == FieldRoute {
+			routeTerms = append(routeTerms, term)
+		}
+	}
+	if len(routeTerms) == 0 {
+		return nil, nil
+	}
+	out := map[string][]string{}
+	for _, t := range matched {
+		if t.Export != "" || t.Profile == "" {
+			continue
+		}
+		var keep []string
+		for _, r := range t.Routes {
+			for _, term := range routeTerms {
+				if globMatch(term.Value, r) {
+					keep = append(keep, r)
+					break
+				}
+			}
+		}
+		out[t.Instance] = keep
+	}
+	return out, nil
 }
 
 // matchesAll is the selector's semantics: terms naming one field are

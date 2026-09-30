@@ -205,7 +205,7 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		if len(cis) > 1 {
 			routes := make([]string, len(cis))
 			for i, ci := range cis {
-				routes[i] = ci.Route
+				routes[i] = strings.Join(ci.Routes, "+")
 			}
 			add("instance %q is derived more than once, by routes %s", id, strings.Join(routes, ", "))
 		}
@@ -425,9 +425,17 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			if name == "" || strings.ContainsAny(name, "/\\ \t") {
 				add("%s: a profile name ends a file name, so it cannot be empty or hold a slash or a space", subject)
 			}
-			if p.Export == inventory.ExportNone {
+			// A profile that runs a program is one process, rendered by the
+			// program's service from its bind, ports and routes; a profile
+			// for a person is files, one per route, in an export's format.
+			switch {
+			case p.Runs != "" && p.Export != "":
+				add("%s: runs %s, whose own service writes its configuration; export is for a profile a person carries, so remove it", subject, p.Runs)
+			case p.Runs == "" && (p.Bind != "" || len(p.Ports) > 0):
+				add("%s: bind and ports are where a program listens; a profile that runs none has its listener in values", subject)
+			case p.Export == inventory.ExportNone:
 				add("%s: export none writes nothing; remove the profile instead", subject)
-			} else {
+			case p.Runs == "":
 				checkExport(subject, p.Export, servicesReached[nodeID])
 			}
 			if _, ok := manifests[p.Runs]; p.Runs != "" && !ok {
@@ -1165,7 +1173,12 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			if !ok {
 				continue
 			}
-			wants = exports[confgen.ExportKey(ei.Service, ei.Export)].Upstream
+			if ei.Export == "" {
+				// A device profile's program reads as its own service.
+				wants = manifests[ei.Service].Upstream
+			} else {
+				wants = exports[confgen.ExportKey(ei.Service, ei.Export)].Upstream
+			}
 		default:
 			inst, ok := realInstances[e.From.Instance]
 			if !ok {

@@ -92,8 +92,24 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 	// upstream to resolve: picking one of them would be arbitrary, and the
 	// template reads downstreams instead.
 	var upstream map[string]any
+	var upstreams []map[string]any
 	downstreams := m.downstreamsFor(instance, fansOut)
-	if !fansOut {
+	switch {
+	case fansOut:
+	case t.Export == "" && m.InstanceByID(instance) == nil:
+		// A device profile's program: one process over every route it is
+		// rendered with.
+		upstreams, err = m.UpstreamsFor(instance, wants)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", instance, err)
+		}
+		if len(upstreams) == 0 {
+			return nil, fmt.Errorf("%s: no route is left to render it with", instance)
+		}
+		if len(upstreams) == 1 {
+			upstream = upstreams[0]
+		}
+	default:
 		upstream, err = m.UpstreamFor(instance, wants)
 		if err != nil {
 			return nil, err
@@ -120,6 +136,7 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 			Instance:       instanceMap,
 			Node:           nodeMap,
 			Upstream:       upstream,
+			Upstreams:      upstreams,
 			Downstreams:    downstreams,
 			Published:      m.publishedFor(instance),
 			PublishedNames: m.publishedNamesFor(instance),
@@ -351,17 +368,50 @@ func (m Renderer) principalsFor(instance string) (map[string][]render.Principal,
 // being rendered declared it needs from that hop; anything it did not ask for
 // is not read and does not reach its template.
 func (m Renderer) UpstreamFor(instance string, wants confgen.UpstreamDecls) (map[string]any, error) {
-	var edge *derive.Edge
 	for i := range m.Data.Derived.Edges {
 		e := &m.Data.Derived.Edges[i]
 		if e.FromInstance == instance || e.From.Instance == instance {
-			edge = e
-			break
+			return m.upstreamVia(instance, e, wants)
 		}
 	}
-	if edge == nil {
-		return nil, nil
+	return nil, nil
+}
+
+// UpstreamsFor is every upstream of a derived instance that is one process
+// over several routes, one per route it is rendered with, in route order.
+// Each carries its route and the service it authenticates against.
+func (m Renderer) UpstreamsFor(instance string, wants confgen.UpstreamDecls) ([]map[string]any, error) {
+	routes := m.routesOf(instance)
+	var out []map[string]any
+	for _, route := range routes {
+		for i := range m.Data.Derived.Edges {
+			e := &m.Data.Derived.Edges[i]
+			if e.FromInstance != instance || e.Route != route {
+				continue
+			}
+			up, err := m.upstreamVia(instance, e, wants)
+			if err != nil {
+				return nil, fmt.Errorf("route %s: %w", route, err)
+			}
+			if up == nil {
+				up = map[string]any{}
+			}
+			terminal := e.Terminal
+			if terminal.Instance == "" {
+				terminal = e.To
+			}
+			up["route"] = route
+			if inst := m.InstanceByID(terminal.Instance); inst != nil {
+				up["service"] = inst.Service
+			}
+			out = append(out, up)
+		}
 	}
+	return out, nil
+}
+
+// upstreamVia resolves the upstream instance reads across edge.
+func (m Renderer) upstreamVia(instance string, edge *derive.Edge, wants confgen.UpstreamDecls) (map[string]any, error) {
 
 	// An instance whose own service forwards holds no credential at the hop
 	// it dials: derive granted it none, and there is no file under it. It
@@ -581,6 +631,41 @@ type Renderer struct {
 	// are stored under: a migration preview reads a renamed node's secrets
 	// where they are before apply moves them.
 	SecretInstance func(string) string
+	// Routes, when it holds an instance, narrows the routes that
+	// instance is rendered with: a profile's program over only some of the
+	// routes it may take, this time. Unset renders every route.
+	Routes map[string][]string
+}
+
+// routesOf is the routes a derived instance is rendered with: its own,
+// narrowed by m.Routes.
+func (m Renderer) routesOf(instance string) []string {
+	for _, ci := range m.Data.Derived.ExportInstances {
+		if ci.ID != instance {
+			continue
+		}
+		only, narrowed := m.Routes[instance]
+		if !narrowed {
+			return ci.Routes
+		}
+		var out []string
+		for _, r := range ci.Routes {
+			if containsString(only, r) {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func containsString(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // storedAt is where p is stored, after secretInstance.
