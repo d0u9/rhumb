@@ -68,6 +68,22 @@ type Docker struct {
 	// done once it is up, such as creating its accounts. It is rendered
 	// like any other file of the service, so it reads the same values.
 	Setup string `yaml:"setup"`
+	// Compose names a rendered file that is the instance's compose file,
+	// written by the service rather than generated: the way out for a
+	// program the fields above cannot describe, such as several one-shot
+	// containers. rhumb still creates the networks and the instance's
+	// directory, installs the files and runs Setup; everything the compose
+	// file itself says is the service's. With it, only Files, Setup,
+	// Teardown, OneShot and a `dir` default may be written.
+	Compose string `yaml:"compose"`
+	// OneShot says the compose file starts nothing on its own: every
+	// container is run by something else, such as a timer, so installing
+	// does not bring the project up.
+	OneShot bool `yaml:"oneshot"`
+	// Teardown names a rendered file, a shell script, run from the
+	// instance's directory before its containers are stopped on uninstall:
+	// the undoing of what Setup did outside the project, such as a timer.
+	Teardown string `yaml:"teardown"`
 	// Defaults are what an instance's `deploy` overrides, key by key.
 	Defaults map[string]any `yaml:"defaults"`
 }
@@ -176,6 +192,21 @@ func (d Docker) check() error {
 			}
 		}
 	}
+	for _, script := range []struct{ key, name string }{{"setup", d.Setup}, {"teardown", d.Teardown}, {"compose", d.Compose}} {
+		if script.name == "" {
+			continue
+		}
+		if f, ok := d.Files[script.name]; ok && (f.Target != "" || f.EnvFile || f.Host != "") {
+			return fmt.Errorf("%s: %s is placed elsewhere; it is used from the instance's directory", script.key, script.name)
+		}
+	}
+	if d.Compose != "" {
+		if err := d.checkCompose(); err != nil {
+			return err
+		}
+	} else if d.OneShot || d.Teardown != "" {
+		return fmt.Errorf("oneshot and teardown are only for a service that writes its own compose")
+	}
 	if d.Setup != "" {
 		if f, ok := d.Files[d.Setup]; ok && (f.Target != "" || f.EnvFile || f.Host != "") {
 			return fmt.Errorf("setup: %s is placed elsewhere; it runs from the instance's directory", d.Setup)
@@ -198,6 +229,36 @@ func (d Docker) check() error {
 		}
 	}
 	return CheckDeployKeys("defaults", d.Defaults)
+}
+
+// checkCompose refuses, beside Compose, whatever would have been written into
+// a generated compose file: with the service's own, it would be ignored.
+func (d Docker) checkCompose() error {
+	var set []string
+	for key, on := range map[string]bool{
+		"ports": len(d.Ports) > 0, "mounts": len(d.Mounts) > 0, "state": len(d.State) > 0,
+		"volumes": len(d.Volumes) > 0, "environment": len(d.Environment) > 0,
+		"privileges": len(d.Privileges) > 0, "reload": len(d.Reload) > 0,
+	} {
+		if on {
+			set = append(set, key)
+		}
+	}
+	for name, f := range d.Files {
+		if f.Target != "" || f.EnvFile {
+			set = append(set, "files."+name+" target or env_file")
+		}
+	}
+	for key := range d.Defaults {
+		if key != "dir" {
+			set = append(set, "defaults."+key)
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	sort.Strings(set)
+	return fmt.Errorf("compose: the service writes its own compose file, so %s would be ignored", strings.Join(set, ", "))
 }
 
 // CheckDeployKeys refuses a key of an instance's `deploy`, or a service's

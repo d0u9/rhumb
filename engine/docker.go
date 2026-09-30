@@ -40,6 +40,11 @@ type manifestContainer struct {
 	Privileges map[string]any    `yaml:"privileges,omitempty"`
 	Reload     []string          `yaml:"reload,omitempty"`
 	Setup      string            `yaml:"setup,omitempty"`
+	// Compose names the rendered file that is the compose file, when the
+	// service writes its own; the fields above it are then empty but Dir.
+	Compose  string `yaml:"compose,omitempty"`
+	OneShot  bool   `yaml:"oneshot,omitempty"`
+	Teardown string `yaml:"teardown,omitempty"`
 }
 
 // manifestMount is one bind mount. Create marks a directory of the
@@ -143,6 +148,9 @@ func (m Renderer) containerFor(instance string, inst inventory.Instance, node in
 	}
 	if !path.IsAbs(c.Dir) {
 		return fail("dir %q is not absolute", c.Dir)
+	}
+	if docker.Compose != "" {
+		return m.ownCompose(instance, overlay, docker, c, man, view)
 	}
 	if c.Name, err = str("container_name"); err != nil {
 		return err
@@ -304,6 +312,54 @@ func (m Renderer) containerFor(instance string, inst inventory.Instance, node in
 		}
 		c.Setup = docker.Setup
 	}
+	man.Container = &c
+	return nil
+}
+
+// ownCompose resolves the container of a service that writes its own compose
+// file: only the directory, the files' places and the scripts.
+func (m Renderer) ownCompose(instance string, overlay map[string]any, docker confgen.Docker, c manifestContainer, man *DeployManifest, view dockerView) error {
+	fail := func(format string, args ...any) error {
+		return fmt.Errorf("%s: %s: %s", instance, confgen.DockerFilename, fmt.Sprintf(format, args...))
+	}
+	for key := range overlay {
+		if key != "dir" {
+			return fail("deploy.%s: the service writes its own compose file; its deploy takes only dir", key)
+		}
+	}
+	for _, name := range []string{docker.Compose, docker.Setup, docker.Teardown} {
+		if name != "" && !hasFile(man.Files, name) {
+			return fail("the service renders no file %s", name)
+		}
+	}
+	for i, f := range man.Files {
+		spec := docker.Files[f.Path]
+		place := f.Path
+		if spec.Host != "" {
+			host, err := view.str(spec.Host)
+			if err != nil {
+				return err
+			}
+			place = ""
+			if host != "" {
+				place = path.Join(host, f.Path)
+			}
+		}
+		if f.Path == docker.Compose {
+			// Installed as compose.yaml, as every instance's is.
+			place = ""
+		}
+		mode := spec.Mode
+		if mode == "" {
+			mode = "0644"
+		}
+		man.Files[i].Place = place
+		man.Files[i].Mode = mode
+	}
+	c.Compose = docker.Compose
+	c.OneShot = docker.OneShot
+	c.Setup = docker.Setup
+	c.Teardown = docker.Teardown
 	man.Container = &c
 	return nil
 }

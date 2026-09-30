@@ -179,21 +179,30 @@ case ${1:-} in
 install)
 	networks
 	install_files
+{{- if not .C.OneShot}}
 	compose up -d --remove-orphans
+{{- end}}
 {{- if .Reload}}
 	compose exec {{q .C.Name}} {{.Reload}}
 {{- end}}
 {{- with .C.Setup}}
-	(cd "$DIR" && CONTAINER={{q $.C.Name}} sh ./{{q .}})
+	(cd "$DIR" && {{with $.C.Name}}CONTAINER={{q .}} {{end}}sh ./{{q .}})
 {{- end}}
+{{- if .C.OneShot}}
+	echo "installed into $DIR; nothing there runs until started"
+{{- else}}
 	echo "{{.C.Name}} started from $DIR"
+{{- end}}
 	;;
 up) compose up -d --remove-orphans ;;
 down) compose down ;;
 status) compose ps ;;
 logs) shift; compose logs "$@" ;;
 uninstall)
-	compose down
+{{- with .C.Teardown}}
+	(cd "$DIR" && sh ./{{q .}})
+{{- end}}
+	compose down --remove-orphans
 	echo "stopped; $DIR and what the container kept in it are left in place"
 	;;
 *)

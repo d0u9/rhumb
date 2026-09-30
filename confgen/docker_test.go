@@ -39,6 +39,16 @@ defaults: {image: example:1, container_name: srv.app}
 	}
 }
 
+func TestLoadDocker_OwnCompose(t *testing.T) {
+	d, err := loadDockerYAML(t, "compose: c.yaml\noneshot: true\nsetup: s.sh\nteardown: t.sh\nfiles: {run: {mode: \"0700\"}}\ndefaults: {dir: /srv/x}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Compose != "c.yaml" || !d.OneShot || d.Teardown != "t.sh" {
+		t.Errorf("%+v", d)
+	}
+}
+
 func TestLoadDocker_Refuses(t *testing.T) {
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"a transport", `ports: {web: http}`, "not tcp, udp or both"},
@@ -47,7 +57,10 @@ func TestLoadDocker_Refuses(t *testing.T) {
 		{"a mount without a target", `mounts: {conf: {files: [a]}}`, "target is required"},
 		{"a privilege not allowed", `privileges: {network_mode: host}`, "not one of"},
 		{"a deploy key not known", `defaults: {root: /srv}`, "unknown root"},
-		{"an unknown key", `compose: own`, "not found"},
+		{"an unknown key", `start: always`, "not found"},
+		{"a field its own compose would ignore", "compose: c.yaml\nports: {web: tcp}\ndefaults: {image: x}", "defaults.image, ports would be ignored"},
+		{"oneshot without its own compose", `oneshot: true`, "only for a service that writes its own compose"},
+		{"its own compose placed elsewhere", "compose: c.yaml\nfiles: {c.yaml: {host: /etc}}", "placed elsewhere"},
 		{"setup inside a mount", "mounts: {c: {target: /c, files: [s.sh]}}\nsetup: s.sh", "in a mount"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
