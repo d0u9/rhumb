@@ -546,6 +546,11 @@ type Node struct {
 	// service manager it registers with. Empty leaves it to whoever builds
 	// the bundle. It is carried into the manifest and read nowhere else.
 	Platform string `yaml:"platform"`
+	// Download is when a bundle for this node downloads a release when
+	// its builder does not say: "build", into the bundle, for a machine
+	// that cannot reach the release, or "install", on the machine. Empty
+	// leaves it to the builder's default. Carried into the manifest.
+	Download string `yaml:"download"`
 	// Accounts is this machine's POSIX accounts by name, for templates that
 	// must write numeric owners: a file on a volume keeps the number, so the
 	// number is written once, here. See

@@ -25,9 +25,10 @@ type Options struct {
 	// Binary is a local program to bundle instead of what the source
 	// would give, for a machine with no network or a build of one's own.
 	Binary string
-	// Download says when a release is downloaded: DownloadInstall (the
-	// default) by ctl install on the machine, which keeps the bundle small
-	// and needs the machine online, or DownloadBuild into the bundle.
+	// Download says when a release is downloaded: DownloadInstall by ctl
+	// install on the machine, which keeps the bundle small and needs the
+	// machine online, or DownloadBuild into the bundle. Empty is what the
+	// manifest's node says, and DownloadInstall when it says nothing.
 	Download string
 }
 
@@ -103,18 +104,19 @@ func Build(src, dst string, opt Options) error {
 	if err := copyFile(filepath.Join(src, ManifestFile), filepath.Join(dst, ManifestFile), 0o600); err != nil {
 		return err
 	}
+	download := downloadFor(m, opt)
 	source := svc.Source()
 	bin := filepath.Join(dst, "bin", svc.Binary.Name)
 	switch {
 	case opt.Binary != "":
 		source = SourceRelease // carried in the bundle like a release
 		err = copyFile(opt.Binary, bin, 0o755)
-	case source == SourceRelease && (opt.Download == "" || opt.Download == DownloadInstall):
+	case source == SourceRelease && download == DownloadInstall:
 		source = sourceReleaseOnMachine
-	case source == SourceRelease && opt.Download == DownloadBuild:
+	case source == SourceRelease && download == DownloadBuild:
 		err = fetch(svc, platform, bin)
 	case source == SourceRelease:
-		err = fmt.Errorf("download %q is not %s or %s", opt.Download, DownloadBuild, DownloadInstall)
+		err = fmt.Errorf("download %q is not %s or %s", download, DownloadBuild, DownloadInstall)
 	}
 	if err != nil {
 		return err
@@ -124,6 +126,18 @@ func Build(src, dst string, opt Options) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dst, "ctl"), ctl, 0o755)
+}
+
+// downloadFor is when a release is downloaded: the builder's choice, else
+// the node's, else on the machine.
+func downloadFor(m Manifest, opt Options) string {
+	if opt.Download != "" {
+		return opt.Download
+	}
+	if m.Download != "" {
+		return m.Download
+	}
+	return DownloadInstall
 }
 
 // Label is the name the service manager knows an instance by. The prefix is

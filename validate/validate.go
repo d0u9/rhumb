@@ -519,6 +519,9 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 				add("node %q: platform %q is not os/arch, such as linux/amd64", n.ID, p)
 			}
 		}
+		if d := n.Download; d != "" && d != "build" && d != "install" {
+			add("node %q: download %q is not build or install", n.ID, d)
+		}
 	}
 
 	// Rule 32: a containerised instance binds every interface of its
