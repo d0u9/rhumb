@@ -301,3 +301,29 @@ func TestDownload_NodeDecidesUnlessTheBuilderDoes(t *testing.T) {
 		}
 	}
 }
+
+func TestBuild_SelfSignedOnlyWhereDefined(t *testing.T) {
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "config.yaml"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
+node: n
+instance: hy2-01
+service: hysteria2
+runtime: host
+platform: linux/amd64
+files:
+  - path: config.yaml
+ports:
+  - {name: users, port: 443, published: a.example}
+`), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+		t.Fatal(err)
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	for _, want := range []string{"self_signed; write_unit", "'subjectAltName=DNS:a.example'", `"$DIR/var/"'tls/fullchain.pem'`} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q", want)
+		}
+	}
+}

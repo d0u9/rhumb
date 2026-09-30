@@ -35,6 +35,17 @@ type Service struct {
 	// an ordinary user's, such as CAP_NET_BIND_SERVICE to listen below
 	// 1024. It gets no other: a unit without any keeps none.
 	Capabilities []string `yaml:"capabilities"`
+	// SelfSigned is a certificate ctl install makes on the machine, in var/,
+	// when it is missing and the rendered configuration names it: for a
+	// server whose clients pin or skip verification rather than trust a CA.
+	SelfSigned *SelfSigned `yaml:"self_signed"`
+}
+
+// SelfSigned names the pair's files, relative to var/. The certificate is
+// for the instance's published names, valid ten years, and never replaced.
+type SelfSigned struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
 }
 
 // Sources are the ways a service's binary may reach a machine. A
@@ -120,6 +131,9 @@ func LoadService(name, dir string) (Service, error) {
 		if !strings.HasPrefix(c, "CAP_") || strings.ContainsAny(c, " \t\n") {
 			return s, fmt.Errorf("service %q: capability %q is not a CAP_ name", name, c)
 		}
+	}
+	if c := s.SelfSigned; c != nil && (c.Cert == "" || c.Key == "" || filepath.IsAbs(c.Cert) || filepath.IsAbs(c.Key)) {
+		return s, fmt.Errorf("service %q: self_signed needs cert and key, both relative to var/", name)
 	}
 	if names := s.Binary.Names(); len(names) != 1 {
 		return s, fmt.Errorf("service %q: binary writes %d of release, apt and path; it takes one", name, len(names))

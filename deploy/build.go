@@ -252,7 +252,7 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
 		"Capabilities": strings.Join(svc.Capabilities, " "),
-		"Dir":          installDir(m, platform), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
+		"Dir":          installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
 		return nil, err
@@ -263,6 +263,42 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 // DefaultInstallRoot is where a Linux host bundle is installed when its
 // manifest names no dir: <root>/<service>, beside /srv/docker.
 const DefaultInstallRoot = "/srv/rhumb"
+
+// selfSigned is the body of ctl's self_signed: what makes the service's
+// self-signed pair when the configuration names it and it is missing.
+func selfSigned(m Manifest, svc Service) string {
+	c := svc.SelfSigned
+	if c == nil {
+		return ":"
+	}
+	var names []string
+	seen := map[string]bool{}
+	for _, p := range m.Ports {
+		if p.Published != "" && !seen[p.Published] {
+			seen[p.Published] = true
+			names = append(names, p.Published)
+		}
+	}
+	if len(names) == 0 {
+		names = []string{m.Instance}
+	}
+	san := make([]string, len(names))
+	for i, n := range names {
+		san[i] = "DNS:" + n
+	}
+	cert, key := `"$DIR/var/"`+shQuote(c.Cert), `"$DIR/var/"`+shQuote(c.Key)
+	return strings.Join([]string{
+		`[ -e ` + cert + ` ] && return 0`,
+		`grep -rqF "$DIR/var/"` + shQuote(c.Cert) + ` "$DIR/conf" || return 0`,
+		`command -v openssl >/dev/null 2>&1 || { echo "making the self-signed certificate needs openssl" >&2; exit 1; }`,
+		`mkdir -p "$(dirname ` + cert + `)" "$(dirname ` + key + `)"`,
+		`openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 -subj ` + shQuote("/CN="+names[0]) + ` -addext ` + shQuote("subjectAltName="+strings.Join(san, ",")) + ` -keyout ` + key + ` -out ` + cert + ` 2>/dev/null`,
+		`chmod 600 ` + key,
+		`chown "$OWNER:$GROUP" ` + cert + ` ` + key + ` 2>/dev/null || true`,
+		`echo "made a self-signed certificate for ` + strings.Join(names, ", ") + `; its pin:"`,
+		`openssl x509 -in ` + cert + ` -noout -fingerprint -sha256 | cut -d= -f2`,
+	}, "\n\t")
+}
 
 // installDir is the shell word ctl sets DIR to: where install puts the
 // bundle. A macOS bundle with no dir stays where it was unpacked.
