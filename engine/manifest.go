@@ -72,8 +72,11 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
+	if t.Export != "" {
+		return m.profileManifest(instance, t, files)
+	}
 	inst := m.InstanceByID(instance)
-	if t.Export != "" || inst == nil {
+	if inst == nil {
 		return nil, nil
 	}
 	var node inventory.Node
@@ -157,6 +160,10 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		}
 	}
 
+	return encodeManifest(instance, man)
+}
+
+func encodeManifest(instance string, man DeployManifest) ([]byte, error) {
 	var out bytes.Buffer
 	enc := yaml.NewEncoder(&out)
 	enc.SetIndent(2)
@@ -164,4 +171,38 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		return nil, fmt.Errorf("%s: manifest: %w", instance, err)
 	}
 	return out.Bytes(), nil
+}
+
+// profileManifest is the manifest of a device profile that names the program
+// running its file, and nil for every other derived file, which is for a
+// person. The profile's file is that program's whole configuration on the
+// device: the program listens where the file says, so the manifest carries
+// no ports, networks or accounts.
+func (m Renderer) profileManifest(instance string, t targetRef, files []artefact) ([]byte, error) {
+	var runs string
+	for _, ci := range m.Data.Derived.ExportInstances {
+		if ci.ID != instance || ci.Profile == "" {
+			continue
+		}
+		for _, n := range m.Data.Inv.Nodes {
+			if n.Broken == "" && n.ID == ci.Node {
+				runs = n.Profiles[ci.Profile].Runs
+			}
+		}
+	}
+	if runs == "" {
+		return nil, nil
+	}
+	man := DeployManifest{
+		Schema:   ManifestSchema,
+		Node:     t.Node,
+		Instance: inventory.LocalName(instance),
+		Service:  runs,
+		Runtime:  inventory.RuntimeHost,
+		Files:    make([]manifestFile, 0, len(files)),
+	}
+	for _, f := range files {
+		man.Files = append(man.Files, manifestFile{Path: f.Output, Executable: f.Executable})
+	}
+	return encodeManifest(instance, man)
 }

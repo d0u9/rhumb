@@ -29,9 +29,12 @@ credential: laptop
 #            profile's file name wins over them key by key.
 #   access   the routes this profile covers, among those the laptop's
 #            credential opens. Unwritten, all of them.
+#   runs     the service whose program runs this file on the laptop. Written,
+#            the export adds a manifest.yaml a deployment tool installs it
+#            from. Unwritten, the file is for a person.
 #
 # A device with profiles does not also write `export`: each profile says its
-# own. Hand over one with `dgs conf export node:laptop profile:singbox`.
+# own. Hand over one with `rhumb export node:laptop profile:singbox`.
 profiles:
   singbox:
     export: json
@@ -39,5 +42,6 @@ profiles:
       local_port: 2080
   browser:
     export: json
+    runs: sslocal
     values:
       local_port: 1080

@@ -78,7 +78,7 @@ data.
 | Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
 | Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `containers`, `accounts`, `instances` |
 | Container network keys | `name`, `subnet`, `gateway`, per entry of a node's `containers` |
-| Profile keys | `export`, `values`, `access` |
+| Profile keys | `export`, `values`, `access`, `runs` |
 | Instance keys | `id`, `service`, `ports`, `process`, `runtime`, `bind`, `containers`, `self`, `values`, `deploy`, `dials` |
 | Port keys | `port`, `protocol`, `self`, `published` (a string or a list), when a port is written as a mapping rather than a bare number |
 | User keys | `username`, `devices`, `export`, `credentials`, `access` |
@@ -1679,6 +1679,12 @@ use needs; the override is the exception for one route.
 
 `access` narrows a profile to some of the routes the device's credential
 opens, as a credential's `access` narrows its owner's. Unwritten, every one.
+
+`runs` names the service whose program runs the profile's file on the device,
+such as `sslocal`. Written, the export adds a `manifest.yaml` beside the file,
+and a deployment tool installs the file as that program's configuration; see
+[the manifest](export.md#the-manifest). Unwritten, the file is for a person to
+put wherever it goes. The service must be defined.
 
 **Profiles are files, not accounts.** Every profile carries the device's one
 credential, so the server's table holds one row for the device however many

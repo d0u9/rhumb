@@ -657,7 +657,11 @@ reading it has to handle twice.
 
 Every instance on a node also writes `manifest.yaml` beside its files, whether
 it runs on the host or in a container. A file written for a person has none,
-because nothing deploys it. The manifest is what a deployment tool reads in
+because nothing deploys it -- unless it is a device profile that names, with
+`runs`, the service whose program reads it on the device. That manifest has
+`runtime: host`, the profile's `service` as `runs` names it, and `files`
+only: the program listens where the file says, so there are no ports,
+networks or accounts to carry. The manifest is what a deployment tool reads in
 place of the inventory: the derived values a deployment needs, and nothing
 the tool would have to interpret.
 

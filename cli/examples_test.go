@@ -356,3 +356,20 @@ func TestExamples_TheAccountTableHoldsNoPlaintext(t *testing.T) {
 		}
 	}
 }
+
+// A profile naming the program that runs it is deployed, so its export
+// carries a manifest; a profile without one is for a person, and has none.
+func TestExamples_ProfileThatRunsWritesAManifest(t *testing.T) {
+	files := renderExamples(t)
+	got := exampleFile(t, files, "laptop-sea-01-ss-ssserver-json-browser/manifest.yaml")
+	for _, want := range []string{"service: sslocal", "runtime: host", "- path: config.json"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("manifest does not carry %q:\n%s", want, got)
+		}
+	}
+	for path := range files {
+		if strings.HasSuffix(path, "laptop-sea-01-ss-ssserver-json-singbox/manifest.yaml") {
+			t.Errorf("singbox profile names no program, yet wrote %s", path)
+		}
+	}
+}

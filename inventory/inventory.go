@@ -592,6 +592,11 @@ type Profile struct {
 	// credential opens. Empty takes every one of them.
 	Access        []string `yaml:"access"`
 	AccessWritten []string `yaml:"-"`
+	// Runs names the service whose program runs this profile's file on the
+	// device. Set, the export also writes a manifest, so a deployment tool
+	// can install the file as that program's configuration. Empty, the file
+	// is for a person, who pastes it wherever it goes.
+	Runs string `yaml:"runs"`
 }
 
 // ProfileNames is n's profile names, sorted.

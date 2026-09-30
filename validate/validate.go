@@ -430,6 +430,9 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			} else {
 				checkExport(subject, p.Export, servicesReached[nodeID])
 			}
+			if _, ok := manifests[p.Runs]; p.Runs != "" && !ok {
+				add("%s: runs names service %q, which is not defined", subject, p.Runs)
+			}
 			// A profile chooses among the routes the device's credential
 			// opens, as a credential chooses among its owner's.
 			if !ownerKnown {
