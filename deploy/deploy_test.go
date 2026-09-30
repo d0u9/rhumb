@@ -327,3 +327,26 @@ ports:
 		}
 	}
 }
+
+func TestBuild_HooksRunAsRootAndOnUninstall(t *testing.T) {
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "config.yaml"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: n\ninstance: h\nservice: hysteria2\nruntime: host\nplatform: linux/amd64\nfiles:\n  - path: config.yaml\n"), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+		t.Fatal(err)
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	for _, want := range []string{
+		`hook ExecStartPre "$DIR/conf"'/hopping.sh' 'up'`,
+		`hook ExecStopPost "$DIR/conf"'/hopping.sh' 'down'`,
+		"\trun_stop_hook\n",
+	} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q", want)
+		}
+	}
+	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
+		t.Error("a launchd bundle took hooks")
+	}
+}
