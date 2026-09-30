@@ -24,7 +24,11 @@ type Service struct {
 		Targets map[string]string `yaml:"targets"`
 	} `yaml:"binary"`
 	Command []string `yaml:"command"`
-	Expose  []string `yaml:"expose"`
+	// EnvFiles are rendered files, in conf/, that hold the program's
+	// environment as KEY=VALUE lines. Only the service manager reads them,
+	// so a secret in one never appears in the unit or plist.
+	EnvFiles []string `yaml:"env_files"`
+	Expose   []string `yaml:"expose"`
 }
 
 //go:embed services/*.yaml

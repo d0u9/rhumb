@@ -68,6 +68,38 @@ func TestBuild_WritesABundleThatKeepsVar(t *testing.T) {
 	}
 }
 
+// A Linux bundle takes its platform from the manifest and hands the
+// service's env files to systemd rather than writing them into the unit.
+func TestBuild_LinuxFromTheManifest(t *testing.T) {
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "server.env"), []byte("MICROBIN_PORT=8080\n"), 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
+node: sea
+instance: microbin-01
+service: microbin
+runtime: host
+platform: linux/amd64
+files:
+  - path: server.env
+`), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+		t.Fatal(err)
+	}
+	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
+	for _, want := range []string{"systemctl", `set -- "$DIR/conf"'/server.env'`, "LABEL=rhumb.sea.microbin-01\n"} {
+		if !strings.Contains(string(ctl), want) {
+			t.Errorf("ctl lacks %q:\n%s", want, ctl)
+		}
+	}
+	if strings.Contains(string(ctl), "MICROBIN_PORT") {
+		t.Error("ctl carries the env file's contents")
+	}
+	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
+		t.Fatalf("ctl does not parse: %s", out)
+	}
+}
+
 func TestBuild_RefusesAnotherBundlesDirectory(t *testing.T) {
 	dst := t.TempDir()
 	os.WriteFile(filepath.Join(dst, "ctl"), []byte("LABEL=rhumb.other.x\n"), 0o755)

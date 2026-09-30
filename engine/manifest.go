@@ -29,6 +29,7 @@ type DeployManifest struct {
 	Instance string                     `yaml:"instance"`
 	Service  string                     `yaml:"service"`
 	Runtime  string                     `yaml:"runtime"`
+	Platform string                     `yaml:"platform,omitempty"`
 	Root     string                     `yaml:"root,omitempty"`
 	Files    []manifestFile             `yaml:"files"`
 	Ports    []manifestPort             `yaml:"ports,omitempty"`
@@ -101,6 +102,7 @@ func (m Renderer) manifestFor(instance string, files []artefact) ([]byte, error)
 		Instance: inventory.LocalName(instance),
 		Service:  t.Service,
 		Runtime:  inst.RuntimeOr(),
+		Platform: node.Platform,
 		Files:    make([]manifestFile, 0, len(files)),
 	}
 	for _, f := range files {
