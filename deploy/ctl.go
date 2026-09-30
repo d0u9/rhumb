@@ -253,7 +253,12 @@ MARK="# rhumb-bundle: $DIR"
 command_line() { set -- {{.Args}}; for a; do printf '%s\n' "$a"; done; }
 env_files() { set -- {{.EnvFiles}}; for a; do printf '%s\n' "$a"; done; }
 
-# systemd reads a quoted word with C-style escapes and expands %.
+# systemd takes a path setting as the rest of the line, unquoted, and expands
+# % in it.
+unit_path() { printf %s "$1" | sed -e 's/%/%%/g'; }
+
+# In a command line, systemd reads a quoted word with C-style escapes and
+# expands %.
 unit_word() { printf '"%s"' "$(printf %s "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/%/%%/g')"; }
 
 as_root() { [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"; }
@@ -270,8 +275,8 @@ write_unit() {
 		echo "[Service]"
 		echo "User=$OWNER"
 		echo "Group=$GROUP"
-		echo "WorkingDirectory=$(unit_word "$DIR/var")"
-		env_files | while IFS= read -r f; do echo "EnvironmentFile=$(unit_word "$f")"; done
+		echo "WorkingDirectory=$(unit_path "$DIR/var")"
+		env_files | while IFS= read -r f; do echo "EnvironmentFile=$(unit_path "$f")"; done
 		printf 'ExecStart='
 		command_line | while IFS= read -r a; do printf '%s ' "$(unit_word "$a")"; done
 		echo
