@@ -607,6 +607,12 @@ type Profile struct {
 	// can install the file as that program's configuration. Empty, the file
 	// is for a person, who pastes it wherever it goes.
 	Runs string `yaml:"runs"`
+	// Bind and Ports are where a profile that runs a program listens, as an
+	// instance's are: the profile is one process of the runs service, and
+	// that service's template renders it. A profile for a person has
+	// neither; its listener is in its export's values.
+	Bind  string `yaml:"bind"`
+	Ports Ports  `yaml:"ports"`
 }
 
 // ProfileNames is n's profile names, sorted.

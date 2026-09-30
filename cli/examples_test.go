@@ -167,14 +167,15 @@ func TestExamples_ExportsDialThePortsPublishedName(t *testing.T) {
 }
 
 // TestExamples_ProfilesListenWhereTheirValuesSay pins
-// docs/inventory.md#a-device-with-several-profiles: the example
-// laptop's two profiles render one configuration each from the same export,
-// and each listens on its own profile's port rather than the defaults'.
+// docs/inventory.md#a-device-with-several-profiles: the example laptop's
+// profile for a person renders from the export and listens where its values
+// say; the profile that runs sslocal is one sslocal process, rendered by the
+// service, listening on its own ports.
 func TestExamples_ProfilesListenWhereTheirValuesSay(t *testing.T) {
 	files := renderExamples(t)
 	for suffix, want := range map[string]string{
 		"laptop-sea-01-ss-ssserver-json-singbox/config.json": `"local_port": 2080`,
-		"laptop-sea-01-ss-ssserver-json-browser/config.json": `"local_port": 1080`,
+		"laptop/sslocal/laptop-browser/config.json":          `"local_port": 1080`,
 	} {
 		if got := exampleFile(t, files, suffix); !strings.Contains(got, want) {
 			t.Errorf("%s does not carry %q:\n%s", suffix, want, got)
@@ -365,8 +366,8 @@ func TestExamples_TheAccountTableHoldsNoPlaintext(t *testing.T) {
 // carries a manifest; a profile without one is for a person, and has none.
 func TestExamples_ProfileThatRunsWritesAManifest(t *testing.T) {
 	files := renderExamples(t)
-	got := exampleFile(t, files, "laptop-sea-01-ss-ssserver-json-browser/manifest.yaml")
-	for _, want := range []string{"service: sslocal", "runtime: host", "- path: config.json"} {
+	got := exampleFile(t, files, "laptop/sslocal/laptop-browser/manifest.yaml")
+	for _, want := range []string{"instance: laptop-browser", "service: sslocal", "runtime: host", "profile: browser", "- sea-01-ss", "- path: config.json"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("manifest does not carry %q:\n%s", want, got)
 		}

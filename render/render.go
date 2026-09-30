@@ -159,6 +159,12 @@ type Input struct {
 	// is absent from every target that did not ask. Nil for a terminal
 	// instance.
 	Upstream map[string]any
+	// Upstreams is every upstream of a program that is one process over
+	// several routes — a device profile that runs it — each as Upstream
+	// holds one, with its route and the service it authenticates against.
+	// Upstream is set too when there is exactly one; with more, asking for
+	// upstream is an error naming them, since the program takes one.
+	Upstreams []map[string]any
 	// Downstreams is the render context's downstreams datasource: for an
 	// instance whose service declares downstreams: many, the hop that
 	// follows it in each route through it, resolved. Empty for every other

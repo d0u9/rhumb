@@ -78,7 +78,7 @@ data.
 | Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
 | Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `download`, `containers`, `accounts`, `instances` |
 | Container network keys | `name`, `subnet`, `gateway`, per entry of a node's `containers` |
-| Profile keys | `export`, `values`, `access`, `runs` |
+| Profile keys | `export`, `values`, `access`, `runs`, `bind`, `ports` |
 | Instance keys | `id`, `service`, `ports`, `process`, `runtime`, `bind`, `containers`, `self`, `values`, `deploy`, `dials` |
 | Port keys | `port`, `protocol`, `self`, `published` (a string or a list), when a port is written as a mapping rather than a bare number |
 | User keys | `username`, `devices`, `export`, `credentials`, `access` |
@@ -1697,13 +1697,23 @@ use needs; the override is the exception for one route.
 `access` narrows a profile to some of the routes the device's credential
 opens, as a credential's `access` narrows its owner's. Unwritten, every one.
 
-`runs` names the service whose program runs the profile's file on the device,
-such as `sslocal`. Written, the export adds a `manifest.yaml` beside the file,
-and a deployment tool installs the file as that program's configuration; see
-[the manifest](export.md#the-manifest). Unwritten, the file is for a person to
-put wherever it goes. The service must be defined.
+`runs` names the service whose program the profile is, such as `sslocal` or
+`singbox`. **An instance is one process**, and a profile that runs a program
+is one: a single derived instance, `<device>-<profile>`, of the named service,
+whose upstreams are every route its `access` opens. The service's own template
+renders it, as it renders an authored instance of that service, reading
+`bind` and `ports` from the profile, and `upstreams` — or `upstream`, for a
+program that takes one, which then refuses a profile opening more. The export
+adds a `manifest.yaml`, and a deployment tool installs the configuration as
+that program's; see [the manifest](export.md#the-manifest). A profile that
+runs a program takes no `export`: a server's exports are for files a person
+carries, and a server does not know the formats of the programs dialling it.
 
-**Profiles are files, not accounts.** Every profile carries the device's one
+Unwritten, the profile is files for a person to put wherever they go, one per
+route in its export's format, with its listener in `values`; it takes no
+`bind` or `ports`. The service must be defined.
+
+**Profiles are uses, not accounts.** Every profile carries the device's one
 credential, so the server's table holds one row for the device however many
 profiles it has, and revoking the device revokes all of them. A use that must
 be revocable on its own is a separate credential, and a credential is chosen

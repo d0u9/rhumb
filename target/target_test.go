@@ -306,3 +306,17 @@ func TestMatch_ProfileNarrowsToOneUseOfADevice(t *testing.T) {
 		t.Fatalf("Match = %v, want the singbox file alone", got)
 	}
 }
+
+func TestRoutes_NarrowsAProfilesProgram(t *testing.T) {
+	matched := []Target{
+		{Instance: "mac-singbox", Profile: "singbox", Routes: []string{"sea-ss", "sea-hy2"}},
+		{Instance: "mac-sea-hy2-hysteria2-link-phone", Profile: "phone", Export: "link", Routes: []string{"sea-hy2"}},
+	}
+	got, err := Routes("node:mac route:sea-hy2", matched)
+	if err != nil || len(got) != 1 || len(got["mac-singbox"]) != 1 || got["mac-singbox"][0] != "sea-hy2" {
+		t.Fatalf("Routes = %v, %v", got, err)
+	}
+	if got, _ := Routes("node:mac", matched); got != nil {
+		t.Fatalf("no route term narrowed %v", got)
+	}
+}

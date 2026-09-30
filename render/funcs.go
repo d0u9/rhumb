@@ -42,7 +42,18 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 		"defaults":  func() map[string]any { return defaults },
 		"node":      func() map[string]any { return in.Node },
 		"instance":  func() map[string]any { return in.Instance },
-		"upstream":  func() map[string]any { return in.Upstream },
+		"upstream": func() (map[string]any, error) {
+			if in.Upstream == nil && len(in.Upstreams) > 1 {
+				routes := make([]string, len(in.Upstreams))
+				for i, u := range in.Upstreams {
+					routes[i], _ = u["route"].(string)
+				}
+				return nil, fmt.Errorf("this program takes one upstream, and it is given %d routes (%s): narrow the profile's access, or the export's routes, to one", len(routes), strings.Join(routes, ", "))
+			}
+			return in.Upstream, nil
+		},
+		"upstreams": func() []map[string]any { return in.Upstreams },
+		"replace":   func(s, old, new string) string { return strings.ReplaceAll(s, old, new) },
 		"principals": func(port string) []Principal {
 			return in.Principals[port]
 		},
