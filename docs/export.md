@@ -809,6 +809,12 @@ nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
 `ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
 disable` takes that back. Either way launchd restarts it when it exits.
 
+A definition may name `self_signed`, a `cert` and `key` under `var/`. When
+the rendered configuration names that certificate and it is missing, `ctl
+install` makes the pair with `openssl`, for the instance's published names and
+valid ten years, and prints its SHA-256 fingerprint for clients to pin. An
+existing pair is never replaced.
+
 `--platform` overrides it, and a node that writes none gets the
 building machine's. A service's deploy definition may name `env_files`,
 rendered files handed to the service manager as the program's environment, so

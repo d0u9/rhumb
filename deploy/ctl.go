@@ -31,6 +31,11 @@ BIN={{.BinDir}}
 install_binary() {
 	{{.InstallBinary}}
 }
+OWNER=$(id -un)
+GROUP=$(id -gn)
+self_signed() {
+	{{.SelfSigned}}
+}
 DOMAIN="gui/$(id -u)"
 SHIMS="$HOME/.local/bin"
 EXPOSE="{{.Expose}}"
@@ -133,7 +138,7 @@ unlink_shims() {
 
 case "${1:-}" in
 install)
-	copy_in; install_binary; link
+	copy_in; install_binary; self_signed; link
 	echo "installed; ./ctl start runs it now, ./ctl enable at every login"
 	;;
 uninstall)
@@ -293,6 +298,9 @@ BIN={{.BinDir}}
 install_binary() {
 	{{.InstallBinary}}
 }
+self_signed() {
+	{{.SelfSigned}}
+}
 OWNER=$(stat -c %U "$HERE")
 GROUP=$(stat -c %G "$HERE")
 SHIMS="$(getent passwd "$OWNER" | cut -d: -f6)/.local/bin"
@@ -384,7 +392,7 @@ unlink_shims() {
 }
 
 case "${1:-}" in
-install) as_root "$@"; copy_in; install_binary; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
+install) as_root "$@"; copy_in; install_binary; self_signed; write_unit; link; systemctl enable "$LABEL"; systemctl restart "$LABEL"; systemctl --no-pager status "$LABEL" | head -n 3 ;;
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi

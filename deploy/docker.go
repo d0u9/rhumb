@@ -56,6 +56,7 @@ type Port struct {
 	Bind      []string `yaml:"bind"`
 	HostPort  int      `yaml:"host_port"`
 	Transport string   `yaml:"transport"`
+	Published string   `yaml:"published"`
 }
 
 // Network is one container network the instance joins.
