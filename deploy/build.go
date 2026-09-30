@@ -73,6 +73,9 @@ func Build(src, dst string, opt Options) error {
 	if len(svc.EnvFiles) > 0 && strings.HasPrefix(platform, "darwin/") {
 		return fmt.Errorf("service %q: env_files is not supported by launchd bundles yet", m.Service)
 	}
+	if (len(svc.Hooks.Start) > 0 || len(svc.Hooks.Stop) > 0) && !strings.HasPrefix(platform, "linux/") {
+		return fmt.Errorf("service %q: hooks are run by systemd; %s has none", m.Service, platform)
+	}
 	if len(svc.Capabilities) > 0 && !strings.HasPrefix(platform, "linux/") {
 		return fmt.Errorf("service %q: capabilities are Linux's; %s has none to give", m.Service, platform)
 	}
@@ -231,6 +234,15 @@ func shellArg(arg string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(q, "''"), "''")
 }
 
+// shellArgs quotes each argument with shellArg, space-separated.
+func shellArgs(args []string) string {
+	q := make([]string, len(args))
+	for i, a := range args {
+		q[i] = shellArg(a)
+	}
+	return strings.Join(q, " ")
+}
+
 // ctlTemplates is the ctl of a host bundle by GOOS: each registers the
 // program with that system's service manager.
 var ctlTemplates = map[string]*template.Template{
@@ -252,7 +264,8 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
 		"Capabilities": strings.Join(svc.Capabilities, " "),
-		"Dir":          installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
+		"HookStart":    shellArgs(svc.Hooks.Start), "HookStop": shellArgs(svc.Hooks.Stop),
+		"Dir": installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
 		return nil, err

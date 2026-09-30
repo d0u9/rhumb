@@ -809,6 +809,14 @@ nothing starts. `ctl start` runs it under launchd until `ctl stop` or logout;
 `ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
 disable` takes that back. Either way launchd restarts it when it exits.
 
+A definition may name `hooks`, a `start` and a `stop` command that systemd
+runs as root, before the program starts and after it stops; uninstall runs
+`stop` once more, for a unit that was not running. A hook whose program is
+missing or empty is left out of the unit, so a rendered script opts out by
+rendering nothing. Hysteria2 uses them for port hopping: its `hopping.sh`
+redirects the hop range to the port it listens on. Only Linux bundles take
+hooks.
+
 A definition may name `self_signed`, a `cert` and `key` under `var/`. When
 the rendered configuration names that certificate and it is missing, `ctl
 install` makes the pair with `openssl`, for the instance's published names and

@@ -39,6 +39,15 @@ type Service struct {
 	// when it is missing and the rendered configuration names it: for a
 	// server whose clients pin or skip verification rather than trust a CA.
 	SelfSigned *SelfSigned `yaml:"self_signed"`
+	// Hooks are commands systemd runs as root around the program, such as
+	// a firewall rule its port range needs: start before it starts, stop
+	// after it stops, and stop again on uninstall. A hook whose program is
+	// missing or empty is skipped, so a rendered script can opt out by
+	// rendering nothing.
+	Hooks struct {
+		Start []string `yaml:"start"`
+		Stop  []string `yaml:"stop"`
+	} `yaml:"hooks"`
 }
 
 // SelfSigned names the pair's files, relative to var/. The certificate is

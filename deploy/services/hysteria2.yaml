@@ -22,3 +22,9 @@ capabilities: [CAP_NET_BIND_SERVICE]
 self_signed:
   cert: tls/fullchain.pem
   key: tls/privkey.pem
+# Port hopping: the rendered hopping.sh redirects the hop range to the one
+# port the server listens on while it runs. It renders empty where the
+# instance hops nowhere, and the hooks are then left out of the unit.
+hooks:
+  start: ["{conf}/hopping.sh", "up"]
+  stop: ["{conf}/hopping.sh", "down"]

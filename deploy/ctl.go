@@ -309,6 +309,17 @@ EXPOSE="{{.Expose}}"
 MARK="# rhumb-bundle: $DIR"
 
 command_line() { set -- {{.Args}}; for a; do printf '%s\n' "$a"; done; }
+# hook KEY ARGS... writes a unit line that runs ARGS as root, unless its
+# program is missing or empty.
+hook() {
+	key=$1; shift
+	[ $# -gt 0 ] && [ -s "$1" ] || return 0
+	printf '%s=+' "$key"
+	for a; do printf '%s ' "$(unit_word "$a")"; done
+	echo
+}
+# run_stop_hook runs the stop hook now, as uninstall does after stopping.
+run_stop_hook() { set -- {{.HookStop}}; if [ $# -gt 0 ] && [ -s "$1" ]; then "$@" || true; fi; }
 env_files() { set -- {{.EnvFiles}}; for a; do printf '%s\n' "$a"; done; }
 
 # systemd takes a path setting as the rest of the line, unquoted, and expands
@@ -351,6 +362,8 @@ write_unit() {
 		printf 'ExecStart='
 		command_line | while IFS= read -r a; do printf '%s ' "$(unit_word "$a")"; done
 		echo
+		hook ExecStartPre {{.HookStart}}
+		hook ExecStopPost {{.HookStop}}
 		echo "Restart=always"
 		echo "RestartSec=5"
 		echo "NoNewPrivileges=true"
@@ -396,6 +409,8 @@ install) as_root "$@"; copy_in; install_binary; self_signed; write_unit; link; s
 uninstall)
 	as_root "$@"
 	if [ -f "$UNIT" ]; then systemctl disable --now "$LABEL"; fi
+	# Stopping ran it already; again, for a unit that was not running.
+	run_stop_hook
 	rm -f "$UNIT"
 	systemctl daemon-reload
 	unlink_shims
