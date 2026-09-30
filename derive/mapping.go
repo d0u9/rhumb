@@ -23,7 +23,7 @@ const PublishLoopback = "127.0.0.1"
 // number, which is the port's own. There is no second number to choose
 // from — the program's own configuration is rendered from the same field,
 // so a mapping changing it would point at a listener that does not exist.
-// See docs/apps/conf/export.md#a-second-file-what-deploys-it.
+// See docs/export.md#a-second-file-what-deploys-it.
 type Mapping struct {
 	// Addresses is every address this port is published at, in the
 	// inventory's network preference order, with loopback first when it is
@@ -43,7 +43,7 @@ type Mapping struct {
 // port written twice is the second truth the deployment file exists to
 // remove.
 //
-// The cases are the ones docs/apps/conf/export.md pins. An edge between two
+// The cases are the ones docs/export.md pins. An edge between two
 // instances on one container network asks for nothing: it never reaches the
 // host. A port only hops from its own node enter publishes on
 // PublishLoopback. A port entered

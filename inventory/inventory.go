@@ -4,7 +4,7 @@
 // listed with its error rather than dropped, as confgen already does for a
 // broken manifest.
 //
-// The model is docs/apps/conf/inventory.md.
+// The model is docs/inventory.md.
 package inventory
 
 import (
@@ -52,7 +52,7 @@ const ExportNone = "none"
 // process. RuntimeHost is the default and is not written. A containerised
 // instance binds ContainerBind, joins a container network of its node, and is
 // what a deployment file is rendered for. See
-// docs/apps/conf/inventory.md#what-runs-the-process.
+// docs/inventory.md#what-runs-the-process.
 const (
 	RuntimeHost   = "host"
 	RuntimeDocker = "docker"
@@ -124,7 +124,7 @@ type Network struct {
 
 // Host is one entry of hosts.yaml: a machine this inventory deploys nothing
 // to, but still names and reserves an address for. See
-// docs/apps/conf/inventory.md#hosts.
+// docs/inventory.md#hosts.
 type Host struct {
 	Network string   `yaml:"network"`
 	Address string   `yaml:"address"`
@@ -163,7 +163,7 @@ type Instance struct {
 	// containerised instance, Load fills the node's first; a host process
 	// joins none. Two instances sharing a container network dial each other
 	// by name, and an edge between them publishes nothing on the host. See
-	// docs/apps/conf/inventory.md#container-networks.
+	// docs/inventory.md#container-networks.
 	Containers map[string]string `yaml:"containers"`
 	// Self says which of its service's own secrets this instance holds,
 	// and the keys of each one that is a set. Unwritten means every name
@@ -171,7 +171,7 @@ type Instance struct {
 	// whole list, so `self: {}` means none of them. A key a port hands out
 	// is a key this instance has whether or not it is written here, so the
 	// keys are worth writing only for one no port hands out. See
-	// docs/apps/conf/inventory.md#a-services-own-secrets.
+	// docs/inventory.md#a-services-own-secrets.
 	Self map[string][]string `yaml:"self"`
 	// Process names the running program this instance belongs to, for
 	// instances that share one: a server listening on two ports from one
@@ -182,24 +182,24 @@ type Instance struct {
 	// Values is this instance's own parameters — a Hysteria2 masquerade
 	// target, a MicroBin public path, an nginx server block — whatever its
 	// service and role need beyond where it runs and what it listens on.
-	// dgs does not read it; a template reads it by name. See
-	// docs/apps/conf/inventory.md#an-instances-own-values.
+	// rhumb does not read it; a template reads it by name. See
+	// docs/inventory.md#an-instances-own-values.
 	Values map[string]any `yaml:"values"`
 	// Deploy is what starting this instance needs beyond the model: an
-	// image, volumes, a restart policy. dgs reads no key of it, exactly as
+	// image, volumes, a restart policy. rhumb reads no key of it, exactly as
 	// it reads no key of Values; the service's deploy template does. It is
 	// a second mapping rather than a corner of Values because the two have
 	// different readers — Values configures the program, Deploy starts it.
 	// Ports are not in it, and neither are secrets: the mapping is derived,
 	// and the credential stays in the configuration file beside it. See
-	// docs/apps/conf/inventory.md#what-a-container-needs-beyond-the-model.
+	// docs/inventory.md#what-a-container-needs-beyond-the-model.
 	Deploy map[string]any `yaml:"deploy"`
 	// Dials names services this instance calls in passing, off any route:
 	// the caller's own name for the dependency to a hop,
 	// [<node>/]<instance>:<port>. The node defaults to this instance's own;
 	// Load writes it in.
 	// A dial is not an edge and grants nothing. See
-	// docs/apps/conf/inventory.md#dialling-a-service-that-is-not-on-a-route.
+	// docs/inventory.md#dialling-a-service-that-is-not-on-a-route.
 	Dials map[string]string `yaml:"dials"`
 	// DialsDerived names the dials resolved from the service's declaration
 	// rather than written, so a tool rewriting the file leaves them alone.
@@ -310,7 +310,7 @@ type Port struct {
 	// the protocols taking more than one take them as a sequence. A `set`
 	// secret is named <name>.<key>, anything else by name alone, and never
 	// a field: a field is half a credential. See
-	// docs/apps/conf/inventory.md#a-secret-several-people-hold.
+	// docs/inventory.md#a-secret-several-people-hold.
 	Self []string `yaml:"self"`
 	// Published is the bare hostname this port answers to, for a port
 	// reached from a browser. A reverse proxy in front matches its site
@@ -320,7 +320,7 @@ type Port struct {
 	// disagrees with what the proxy serves breaks sign-in rather than the
 	// page. It is a bare hostname and not a URL: the site block wants the
 	// name alone, and a template needing a scheme writes one. See
-	// docs/apps/conf/inventory.md#the-name-a-port-is-published-at.
+	// docs/inventory.md#the-name-a-port-is-published-at.
 	//
 	// It is written as a string or a list; Published is the first name and
 	// Names all of them, for a proxy answering to its own sites.
@@ -517,7 +517,7 @@ type Node struct {
 	// directly in nodes/ has none. A group naming a user in users.yaml is
 	// that user's devices, and fills Owner for every node in it; a group
 	// naming no user is whoever the machines belong to — a provider, a
-	// household, a company — and dgs reads nothing more into it.
+	// household, a company — and rhumb reads nothing more into it.
 	Group string `yaml:"-"`
 	// Networks says where others can reach this node: network name to
 	// address.
@@ -530,13 +530,13 @@ type Node struct {
 	// node reaches every network it has an address on, and every node
 	// reaches Root.Universal implicitly, so Reaches is written only for the
 	// remaining case. See
-	// docs/apps/conf/inventory.md#reached-and-reaching.
+	// docs/inventory.md#reached-and-reaching.
 	Reaches []string `yaml:"reaches"`
 	// Containers is the container networks on this machine, in preference
 	// order: the first is the one a containerised instance joins when it
 	// names none, and two instances sharing several dial over the first of
 	// them. Each is a scope inside the node's loopback. See
-	// docs/apps/conf/inventory.md#container-networks.
+	// docs/inventory.md#container-networks.
 	Containers []ContainerNetwork `yaml:"containers"`
 	// Runtime is what delivers an instance on this node that writes no
 	// `runtime` of its own. Empty means RuntimeHost.
@@ -544,19 +544,19 @@ type Node struct {
 	// Accounts is this machine's POSIX accounts by name, for templates that
 	// must write numeric owners: a file on a volume keeps the number, so the
 	// number is written once, here. See
-	// docs/apps/conf/inventory.md#a-nodes-accounts.
+	// docs/inventory.md#a-nodes-accounts.
 	Accounts map[string]Account `yaml:"accounts"`
 	// Export narrows what is written for this device to one of the ways the
 	// services it reaches offer, or ExportNone to write nothing at all.
 	// Empty takes every way they offer. See
-	// docs/apps/conf/inventory.md#which-export-a-person-receives.
+	// docs/inventory.md#which-export-a-person-receives.
 	Export string `yaml:"export"`
 	// Profiles are the uses this device is put to, by name — "singbox",
 	// "browser" — each written out as its own set of files. A device with
 	// none is written out once, as Export says; a device with profiles is
 	// written out once per profile, and each profile's Export takes the
 	// device's place. The two are not written together. See
-	// docs/apps/conf/inventory.md#a-device-with-several-profiles.
+	// docs/inventory.md#a-device-with-several-profiles.
 	Profiles map[string]Profile `yaml:"profiles"`
 	// Instances is what the node runs, written inline or read from the
 	// directory the node names. decodeNode fills it; see instancesRef.
@@ -643,7 +643,7 @@ type User struct {
 // Credential is one of a person's credentials: what it is for, and which of
 // their routes it opens.
 type Credential struct {
-	// Note says where this credential is used — free text dgs never reads.
+	// Note says where this credential is used — free text rhumb never reads.
 	Note string `yaml:"note"`
 	// Reaches names additional networks where the person can use a credential
 	// without a modeled device. The universal network remains implicit.
@@ -653,7 +653,7 @@ type Credential struct {
 	// without one. It may name only routes the person holds: access is
 	// granted to the person, and a credential chooses among what they
 	// already have rather than reaching past it. See
-	// docs/apps/conf/inventory.md#a-credential-may-open-fewer-routes.
+	// docs/inventory.md#a-credential-may-open-fewer-routes.
 	Access        []string `yaml:"access"`
 	AccessWritten []string `yaml:"-"`
 }
@@ -724,7 +724,7 @@ type Route struct {
 	// network name or a node id, the place a client must be to use it.
 	// Empty is a route written at the top level, reachable wherever its
 	// entry is. The route's key is <scope>/<name> when Scope is set. Set by
-	// Load, not part of the YAML. See docs/apps/conf/inventory.md#route-scopes.
+	// Load, not part of the YAML. See docs/inventory.md#route-scopes.
 	Scope string `yaml:"-"`
 }
 
@@ -750,7 +750,7 @@ type Root struct {
 	UsersBroken string
 	// Sets is users.yaml's `sets`: named lists of routes an access list
 	// names as @<set>. Load expands them; see
-	// docs/apps/conf/inventory.md#named-sets.
+	// docs/inventory.md#named-sets.
 	Sets map[string][]string
 
 	// Routes is routes.yaml's `routes` map, keyed by route name.

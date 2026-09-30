@@ -33,7 +33,7 @@ type nodeGroup struct {
 	// They hold instances the same way and group the same way, but nothing
 	// else about them is a node's: there is no node file, no networks, and
 	// no node detail to show. See
-	// docs/apps/conf/inventory.md#managed-and-unmanaged-devices.
+	// docs/inventory.md#managed-and-unmanaged-devices.
 	user bool
 	// group is the directory this node's file sits in under nodes/: whose
 	// machines these are. owner is the person a device belongs to, which is

@@ -1,6 +1,6 @@
 package render_test
 
-// This is the milestone 6 checkpoint docs/apps/conf/inventory.md asks for:
+// This is the milestone 6 checkpoint docs/inventory.md asks for:
 // "at the end of this milestone one target renders end to end." It wires
 // inventory, derive and secretstore together by hand — the way a future
 // export command will — and renders one real target through render.Render.

@@ -1,10 +1,10 @@
 // Package render turns one target into rendered bytes: a role's defaults,
-// the render context docs/apps/conf/inventory.md#the-render-context pins,
+// the render context docs/inventory.md#the-render-context pins,
 // and the target itself, run through a template. It knows nothing of the
 // TUI or the filesystem layout — Input carries everything it needs as
 // already-decoded values and bytes.
 //
-// The rules are in docs/apps/conf/export.md#rendering.
+// The rules are in docs/export.md#rendering.
 package render
 
 import (
@@ -24,14 +24,14 @@ type Target struct {
 	Instance string
 }
 
-// String is service/role/instance, as docs/apps/conf/export.md#targets-and-selectors
+// String is service/role/instance, as docs/export.md#targets-and-selectors
 // writes it.
 func (t Target) String() string {
 	return t.Service + "/" + t.Instance
 }
 
 // Principal is one account a per-principal port grants, with its secret —
-// what docs/apps/conf/inventory.md#the-render-context's principals
+// what docs/inventory.md#the-render-context's principals
 // datasource holds per entry.
 type Principal struct {
 	Name   string
@@ -112,7 +112,7 @@ type Name struct {
 // which is the port's own on both sides. A deploy template reads one as
 // `mapping "<port>"` and writes one published port per address. It is
 // derived from the model and never written; see
-// docs/apps/conf/export.md#a-second-file-what-deploys-it.
+// docs/export.md#a-second-file-what-deploys-it.
 type Mapping struct {
 	// Addresses is every address this port is published at, in the
 	// inventory's network preference order. It is a list because a machine
@@ -125,7 +125,7 @@ type Mapping struct {
 
 // Input is one target's render context, plus the template it renders. Every
 // field but Template, Defaults and DefaultsKind corresponds to one of
-// docs/apps/conf/inventory.md#the-render-context's datasources; node,
+// docs/inventory.md#the-render-context's datasources; node,
 // instance, upstream, own and target are read-only template functions
 // returning them.
 type Input struct {
@@ -139,7 +139,7 @@ type Input struct {
 	Defaults []byte
 	// DefaultsKind is confgen.DefaultsDocument or confgen.DefaultsElement,
 	// and decides how Defaults and Instance combine. See
-	// docs/apps/conf/export.md#two-kinds-of-defaults.
+	// docs/export.md#two-kinds-of-defaults.
 	DefaultsKind string
 
 	// Instance is the render context's instance datasource: id, service,
@@ -231,7 +231,7 @@ func render(in Input) ([]byte, error) {
 	case confgen.DefaultsDocument:
 		// The instance's own values win over the whole document. It is
 		// values that merge, not the instance map: an instance's other keys
-		// are what dgs itself needs — id, service, bind, ports — and are
+		// are what rhumb itself needs — id, service, bind, ports — and are
 		// reached through the instance function, so merging them would put
 		// them in the document under names a service never declared, and
 		// would leave the keys a service does declare unreachable, because
@@ -244,7 +244,7 @@ func render(in Input) ([]byte, error) {
 	case confgen.DefaultsElement:
 		// The defaults are one entry of a list, and it is for the template to
 		// apply to each entry of whichever list that is — see the open
-		// question in docs/apps/conf/export.md#open-questions. The instance
+		// question in docs/export.md#open-questions. The instance
 		// reaches the template unmerged, and defaults() hands over the raw
 		// defaults.
 		root = instance

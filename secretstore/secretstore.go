@@ -1,4 +1,4 @@
-// Package secretstore reads and writes conf.secrets: one credential, one
+// Package secretstore reads and writes the secrets root: one credential, one
 // file, at <instance>/<port>/<group>/<name>. The group is whose the
 // credential is — a person, or whoever hosts a relaying machine — and the
 // name is which of their identities holds it, so every credential under a
@@ -7,7 +7,7 @@
 // inventory's derivation implies, compares that against what is on disk,
 // generates what is missing, and never deletes what sync no longer implies.
 //
-// The rules are in docs/apps/conf/inventory.md#secrets.
+// The rules are in docs/inventory.md#secrets.
 //
 // Two things imply a path. A role whose auth is confgen.AuthPerPrincipal
 // implies one per (principal, port) pair derive.Derive already computed. A
@@ -59,12 +59,12 @@ type Path struct {
 	// Key is which of a `set` secret's values this is, and Field which part
 	// of a credential made of several. Both are empty for a principal's
 	// credential and for a single self secret. See
-	// docs/apps/conf/inventory.md#a-services-own-secrets.
+	// docs/inventory.md#a-services-own-secrets.
 	Key   string
 	Field string
 }
 
-// String is the path relative to conf.secrets.
+// String is the path relative to the secrets root.
 func (p Path) String() string {
 	return filepath.Join(p.Instance, p.Port, p.Group, p.Name, p.Key, p.Field)
 }
@@ -144,7 +144,7 @@ func ImpliedPaths(inv *inventory.Root, manifests map[string]confgen.Manifest, mo
 	return out
 }
 
-// shapeOf returns the shape one path's value takes, and whether dgs
+// shapeOf returns the shape one path's value takes, and whether rhumb
 // generates it at all. A principal's credential takes the service's own
 // Secret block; one of an instance's own takes its declaration's, falling
 // back to the service's, and a field takes the field's. A confgen.KindOpaque
@@ -183,7 +183,7 @@ type Result struct {
 	// Missing are implied paths with no file on disk yet.
 	Missing []Path
 	// Orphaned are files on disk that nothing implies any more. Sync never
-	// deletes these; see docs/apps/conf/inventory.md#keeping-the-tree-in-step.
+	// deletes these; see docs/inventory.md#keeping-the-tree-in-step.
 	Orphaned []Path
 	// RenameHint is true when Missing and Orphaned are the same size and
 	// both non-empty — sync cannot tell a rename from an unrelated add and
@@ -192,7 +192,7 @@ type Result struct {
 }
 
 // Sync compares the paths implied against the files already in root, a
-// conf.secrets tree. It reads the filesystem but changes nothing.
+// the secrets root tree. It reads the filesystem but changes nothing.
 func Sync(root string, implied []Path) (Result, error) {
 	onDisk, err := walk(root)
 	if err != nil {
@@ -410,7 +410,7 @@ func ReadPrevious(root string, p Path) (value string, ok bool, err error) {
 // PreviousModTimes finds every .previous file under root and returns its
 // modification time, keyed by the path of the secret it is the previous
 // value of (without the .previous suffix) — validate's own input for
-// docs/apps/conf/inventory.md#validation rule 16: no .previous file older
+// docs/inventory.md#validation rule 16: no .previous file older
 // than seven days.
 func PreviousModTimes(root string) (map[string]time.Time, error) {
 	onDisk, err := walkWithInfo(root)
@@ -462,7 +462,7 @@ func walkWithInfo(root string) (map[string]fs.FileInfo, error) {
 }
 
 // ReadSelf reads everything under <instance>/self/ — the instance's own
-// secrets, docs/apps/conf/inventory.md#the-render-context's self datasource.
+// secrets, docs/inventory.md#the-render-context's self datasource.
 // The result mirrors the tree: a name is a string when it is one file, and a
 // map when it is a set, a record of fields, or both. So self.psk.main and
 // self.account.main.password read the way their paths are written.
@@ -516,7 +516,7 @@ func put(into map[string]any, segments []string, value string) {
 
 // Mv moves a secret path (a node, instance or the whole tree under one
 // instance) from oldPath to newPath, both relative to root. It is
-// docs/apps/conf/inventory.md's explicit answer to a rename: sync only
+// docs/inventory.md's explicit answer to a rename: sync only
 // reports equal counts of new and orphaned paths, this performs it.
 func Mv(root, oldRel, newRel string) error {
 	oldFull, newFull := filepath.Join(root, oldRel), filepath.Join(root, newRel)

@@ -391,7 +391,7 @@ func TestPreviousModTimes(t *testing.T) {
 // TestSync_NonCredentialFilesAreNotOrphans covers the two things under a
 // secrets root that are never credentials: a file beside the instance
 // directories, and a dotfile anywhere. Reporting them would be noise nobody
-// can act on, and `dgs conf init` writes both.
+// can act on, and `rhumb init` writes both.
 func TestSync_NonCredentialFilesAreNotOrphans(t *testing.T) {
 	inv, manifests := testInventory()
 	model := mustDerive(t, inv, manifests)
@@ -513,7 +513,7 @@ func TestImpliedPaths_SetAndFields(t *testing.T) {
 	}
 }
 
-// TestGenerate_OpaqueIsNeverGenerated pins the one shape dgs refuses to
+// TestGenerate_OpaqueIsNeverGenerated pins the one shape rhumb refuses to
 // invent: a private key or a certificate is nothing a random string can
 // stand in for, so its path stays missing until someone writes it.
 func TestGenerate_OpaqueIsNeverGenerated(t *testing.T) {

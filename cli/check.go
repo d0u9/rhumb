@@ -1,6 +1,6 @@
-// This file is `dgs conf --check`: the whole of what the TUI would tell you
-// about an inventory being wrong, written to stdout without opening it. See
-// docs/apps/conf/inspect.md#the-check-report.
+// This file is `rhumb check`: the whole of what the TUI would tell you
+// about an inventory being wrong, written to stdout without opening it. A TUI
+// embedding this package shows the same problems interactively.
 package cli
 
 import (
@@ -35,7 +35,7 @@ func (e ErrProblems) Error() string {
 func Check(out io.Writer, global Settings) error {
 	root, secretsDir := global.Root, global.Secrets
 	if root == "" {
-		return fmt.Errorf("conf.root is not configured")
+		return fmt.Errorf("no generator root given")
 	}
 
 	l, err := engine.Load(root)
@@ -69,7 +69,7 @@ func Check(out io.Writer, global Settings) error {
 	// are named individually rather than as one rule.
 	switch {
 	case secretsDir == "":
-		problems = append(problems, "conf.secrets is not configured: no credential can be read or checked")
+		problems = append(problems, "no secrets root given: no credential can be read or checked")
 	case previousErr != nil:
 		problems = append(problems, fmt.Sprintf("secrets store: %v", previousErr))
 	default:
@@ -166,13 +166,13 @@ func checkSecrets(l engine.Loaded, secretsDir string) ([]string, error) {
 }
 
 // Targets lists every target the generator root holds, grouped by
-// node, which is what docs/apps/conf/export.md#targets-and-selectors calls
+// node, which is what docs/export.md#targets-and-selectors calls
 // for: a way to see what the root holds, and what a selector would match,
 // without rendering anything.
 func Targets(out io.Writer, global Settings) error {
 	root := global.Root
 	if root == "" {
-		return fmt.Errorf("conf.root is not configured")
+		return fmt.Errorf("no generator root given")
 	}
 	l, err := engine.Load(root)
 	if err != nil {

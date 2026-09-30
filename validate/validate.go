@@ -1,11 +1,11 @@
 // Package validate checks an inventory and its derivation against the rules
-// in docs/apps/conf/inventory.md#validation. Each rule is one function,
+// in docs/inventory.md#validation. Each rule is one function,
 // contributing zero or more Issues; Validate runs all of them and returns
 // everything found, rather than stopping at the first problem.
 //
 // It is a pure function of already-loaded, already-derived values — the
 // same inventory.Root, confgen.Manifest set and derive.Model the rest of
-// dgs conf works with — and touches no filesystem itself.
+// rhumb works with — and touches no filesystem itself.
 //
 // Rule 15 (the secrets tree matching what the inventory implies, both
 // directions) needs secretstore.Sync and is not here; doc's own words are
@@ -42,7 +42,7 @@ type instRef struct {
 }
 
 // isOverride reports whether inst is a client override rather than a full
-// instance definition: docs/apps/conf/inventory.md says "service and role
+// instance definition: docs/inventory.md says "service and role
 // may not be written in an override", so an instance naming neither is one.
 func isOverride(inst inventory.Instance) bool {
 	return inst.Service == ""
@@ -113,7 +113,7 @@ func containsString(list []string, s string) bool {
 	return false
 }
 
-// Validate runs every rule in docs/apps/conf/inventory.md#validation but
+// Validate runs every rule in docs/inventory.md#validation but
 // rule 15, against an inventory already loaded by inventory.Load, the
 // service manifests it names, the derive.Model derive.Derive computed from
 // both, and every .previous file's modification time — keyed by the path
@@ -1168,7 +1168,7 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		// The port that hands the secrets out is the one the credential is
 		// at, which is the hop behind a relay rather than the relay itself:
 		// a forwarder holds nothing to hand over. See
-		// docs/apps/conf/inventory.md#a-service-that-forwards.
+		// docs/inventory.md#a-service-that-forwards.
 		to := e.Terminal
 		if to.Instance == "" {
 			to = e.To

@@ -144,10 +144,10 @@ universal: internet
 	}
 }
 
-// TestLoad_InstanceValuesAreOpaque covers an instance's own values: dgs
+// TestLoad_InstanceValuesAreOpaque covers an instance's own values: rhumb
 // parses them as an arbitrary mapping and does not interpret their shape —
 // nested structure and a list both come through unchanged, for a template to
-// read by name. See docs/apps/conf/inventory.md#an-instances-own-values.
+// read by name. See docs/inventory.md#an-instances-own-values.
 func TestLoad_InstanceValuesAreOpaque(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, NodesDir, "srv.yaml"), `

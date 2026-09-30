@@ -15,7 +15,7 @@ import (
 )
 
 // funcs builds the template.FuncMap: the function set
-// docs/apps/conf/export.md#the-template-language names, closing over
+// docs/export.md#the-template-language names, closing over
 // defaults and the render context in's other fields carry.
 func funcs(defaults map[string]any, in Input) map[string]any {
 	return map[string]any{
@@ -75,7 +75,7 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 // mergeFunc implements merge: the first argument wins, each later one losing
 // to every earlier one. Nested maps merge key by key; a list loses wholesale
 // to an earlier list rather than being merged into it — see
-// docs/apps/conf/export.md#the-template-language.
+// docs/export.md#the-template-language.
 func mergeFunc(args ...any) (map[string]any, error) {
 	acc := map[string]any{}
 	for i := len(args) - 1; i >= 0; i-- {
@@ -226,7 +226,7 @@ func requiredFunc(value any, name string) (any, error) {
 // arguments than the name has levels, it returns the map of what is under
 // it, so a template can range over a set. A name or key matching nothing is
 // an error naming it, rather than an empty value that fails further down.
-// See docs/apps/conf/export.md#the-template-language.
+// See docs/export.md#the-template-language.
 func secretFunc(self map[string]any) func(name string, more ...string) (any, error) {
 	return func(name string, more ...string) (any, error) {
 		at, ok := self[name]

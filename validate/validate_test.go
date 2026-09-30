@@ -856,7 +856,7 @@ func TestValidate_PortDispatchFrontsNoName(t *testing.T) {
 }
 
 // TestValidate_UnknownRuntime is rule 23: `runtime` is one of the three
-// words. Nothing else in dgs reads the value, so a misspelling would be
+// words. Nothing else in rhumb reads the value, so a misspelling would be
 // silent everywhere if this did not report it.
 func TestValidate_UnknownRuntime(t *testing.T) {
 	inv := validInventory()

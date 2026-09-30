@@ -377,7 +377,7 @@ func TestRender_Published(t *testing.T) {
 
 func TestRender_DocumentDefaults_InstanceKeysStayOutOfTheDocument(t *testing.T) {
 	// A node file writes a service's own settings under values, and nowhere
-	// else: an instance's id, service, bind and ports are dgs's own and are
+	// else: an instance's id, service, bind and ports are rhumb's own and are
 	// reached through the instance function, not as document keys.
 	out, err := Render(Input{
 		Target:       Target{Service: "hysteria2", Instance: "u-node-group-09"},

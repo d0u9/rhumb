@@ -1,7 +1,7 @@
-// This file is `dgs conf export`: the command-line half of exporting. The
+// This file is `rhumb export`: the command-line half of exporting. The
 // TUI half lives on the inspect page (exportflow.go), where the selection is
 // what is marked, or the row under the cursor; here it is a selector, which is what makes an export
-// repeatable. See docs/apps/conf/export.md#exporting-from-the-command-line.
+// repeatable. See docs/export.md#exporting-from-the-command-line.
 package cli
 
 import (
@@ -31,7 +31,7 @@ const stdoutDest = "-"
 // safe to pipe into a program that parses what it reads.
 var ErrOut io.Writer = os.Stderr
 
-// Export runs `dgs conf export <selector>... [--to dir | --zip file]`.
+// Export runs `rhumb export <selector>... [--to dir | --zip file]`.
 //
 // Everything it writes is plaintext: the same material the secrets store
 // holds, in the form a server reads it. So it says what it is about to write
@@ -39,7 +39,7 @@ var ErrOut io.Writer = os.Stderr
 func Export(in io.Reader, out io.Writer, args []string, flags map[string]string, global Settings) error {
 	root, secretsDir := global.Root, global.Secrets
 	if root == "" {
-		return fmt.Errorf("conf.root is not configured")
+		return fmt.Errorf("no generator root given")
 	}
 
 	l, err := engine.Load(root)
@@ -86,7 +86,7 @@ func Export(in io.Reader, out io.Writer, args []string, flags map[string]string,
 			destDir = dir
 			break
 		}
-		return fmt.Errorf("no destination: give --to <dir> or --zip <file>, or set conf.export.dir")
+		return fmt.Errorf("no destination: give --to <dir> or --zip <file>")
 	}
 
 	// Render everything before writing anything, so the plan named below is

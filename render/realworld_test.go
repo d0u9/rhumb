@@ -2,7 +2,7 @@ package render_test
 
 // This exercises the exact template text migrated into
 // ~/confgen/services/shadowsocks-rust — the multi-port,
-// shared case docs/apps/conf/inventory.md#a-shared-identity-alongside-a-principals-own
+// shared case docs/inventory.md#a-shared-identity-alongside-a-principals-own
 // describes, rendered against fixture data shaped like that inventory rather
 // than a minimal one. It is a regression test for the migration, not a
 // generic feature test — see internal/conf/render/integration_test.go for

@@ -15,7 +15,7 @@
 // It only discovers what is there, and which manifests are broken. It does
 // not render anything.
 //
-// The rules are in docs/apps/conf/export.md.
+// The rules are in docs/export.md.
 package confgen
 
 import (
@@ -33,7 +33,7 @@ import (
 // directory per way that service's credential is handed to a person: an
 // export renders one service's material and nothing else, so it belongs to
 // that service rather than beside it. See
-// docs/apps/conf/inventory.md#which-export-a-person-receives.
+// docs/inventory.md#which-export-a-person-receives.
 const (
 	ServicesDir = "services"
 	ExportsDir  = "exports"
@@ -44,14 +44,14 @@ const (
 // rendered for a containerised instance beside the configuration. The
 // directory is what declares it, the way an export's is, so the service's
 // own manifest grows no key. A service holding none renders one file. See
-// docs/apps/conf/export.md#a-second-file-what-deploys-it.
+// docs/export.md#a-second-file-what-deploys-it.
 const DeployDir = "deploy"
 
 // ManifestFilename names the file that marks a subdirectory of ServicesDir
 // as a service, and declares how it renders.
 const ManifestFilename = "confgen.yaml"
 
-// Auth values a service declares. See docs/apps/conf/inventory.md#how-a-service-says-what-it-needs.
+// Auth values a service declares. See docs/inventory.md#how-a-service-says-what-it-needs.
 const (
 	AuthPerPrincipal = "per-principal"
 	AuthNone         = "none"
@@ -68,7 +68,7 @@ const RotationDisruptive = "disruptive"
 // DownstreamsOne and DownstreamsMany are the two values `downstreams` may
 // take: whether an instance of this service dials one upstream, the same in
 // every route through it, or one per route. DownstreamsOne is the default and
-// is not written. See docs/apps/conf/inventory.md#a-service-that-fans-out.
+// is not written. See docs/inventory.md#a-service-that-fans-out.
 const (
 	DownstreamsOne  = "one"
 	DownstreamsMany = "many"
@@ -94,13 +94,13 @@ const (
 // user: Samba maps the name a client logs in with onto one, and a suffix there
 // is a second name for the same account. It trades the second credential away:
 // a person granted two on one port renders two accounts under one name, which
-// validation reports. See docs/apps/conf/export.md#the-account-name.
+// validation reports. See docs/export.md#the-account-name.
 const (
 	AccountsCredential = "credential"
 	AccountsPerson     = "person"
 )
 
-// DefaultsDocument and DefaultsElement are the two values `defaults` may take. See docs/apps/conf/export.md#two-kinds-of-defaults.
+// DefaultsDocument and DefaultsElement are the two values `defaults` may take. See docs/export.md#two-kinds-of-defaults.
 const (
 	DefaultsDocument = "document"
 	DefaultsElement  = "element"
@@ -154,7 +154,7 @@ type Manifest struct {
 	Accounts string `yaml:"accounts"`
 	// Rotation is RotationDisruptive when this service's template cannot
 	// emit two accounts for one principal, or empty otherwise. See
-	// docs/apps/conf/inventory.md#rotation.
+	// docs/inventory.md#rotation.
 	Rotation string `yaml:"rotation"`
 	// Exports names every way a credential to reach this service may be
 	// handed to a person: a share URI, a JSON configuration, a QR code.
@@ -163,7 +163,7 @@ type Manifest struct {
 	// this service produces no file for anyone — MicroBin is reached from a
 	// browser — and a device's `export` does not bring one back: it chooses
 	// among these, never whether any exists. See
-	// docs/apps/conf/inventory.md#which-export-a-person-receives.
+	// docs/inventory.md#which-export-a-person-receives.
 	//
 	// It is not written in confgen.yaml: Load fills it from the service's
 	// own ExportsDir, so the directories that exist are the list, and the
@@ -184,25 +184,25 @@ type Manifest struct {
 	// after it is generated does not belong here — it is configuration, and
 	// belongs in defaults.yaml. Which of them a principal receives is a
 	// port's business, not this one's; see inventory.Port.Self. See
-	// docs/apps/conf/inventory.md#a-services-own-secrets.
+	// docs/inventory.md#a-services-own-secrets.
 	Self SelfDecls `yaml:"self"`
 	// Dials is what an instance of this service calls off any route, by the
 	// name its templates use: a service and a port of it. An instance that
 	// writes no dial of that name gets the one instance of that service in
 	// the innermost scope it shares with it. See
-	// docs/apps/conf/inventory.md#dialling-a-service-by-type.
+	// docs/inventory.md#dialling-a-service-by-type.
 	Dials map[string]DialDecl `yaml:"dials"`
 	// Proxy is what a reverse proxy in front of this service must do for
 	// it — forward the client's address, accept a large body — by the name
 	// the proxy's template reads. A port may override a key. See
-	// docs/apps/conf/inventory.md#what-a-proxy-is-told.
+	// docs/inventory.md#what-a-proxy-is-told.
 	Proxy map[string]any `yaml:"proxy"`
 	// Upstream declares what this service needs from the hop it connects
 	// to, beyond the address, port and account every template is given.
 	// Reading it is the consumer's business: a value crosses from one
 	// instance to another because the program that dials says it needs it,
 	// never because the program that listens happens to publish it. See
-	// docs/apps/conf/inventory.md#what-a-service-needs-from-its-upstream.
+	// docs/inventory.md#what-a-service-needs-from-its-upstream.
 	Upstream UpstreamDecls `yaml:"upstream"`
 	// Forwards is true when an instance of this service terminates nothing:
 	// it moves bytes from one of its ports to the hop that follows it and
@@ -213,7 +213,7 @@ type Manifest struct {
 	// address and authenticates against the hop behind it, so nothing here
 	// holds an account, and a route entering here is written out as the
 	// service that ends it. See
-	// docs/apps/conf/inventory.md#a-service-that-forwards.
+	// docs/inventory.md#a-service-that-forwards.
 	Forwards bool `yaml:"forwards"`
 	// Dispatch is DispatchName or DispatchPort: how an instance that is the
 	// entrance for several routes tells one from another. It is read only
@@ -228,7 +228,7 @@ type Manifest struct {
 	// same successor in every route through it, and it is a statement about
 	// shape rather than about credentials: a proxy forwards, it does not
 	// authenticate, so declaring this hands it nothing. See
-	// docs/apps/conf/inventory.md#a-service-that-fans-out.
+	// docs/inventory.md#a-service-that-fans-out.
 	Downstreams string `yaml:"downstreams"`
 }
 
@@ -269,7 +269,7 @@ func (m Manifest) DispatchesBy() string {
 	return m.Dispatch
 }
 
-// UpstreamShared is the one UpstreamDecls name dgs understands today: the
+// UpstreamShared is the one UpstreamDecls name rhumb understands today: the
 // secrets the upstream port hands to everything granted on it, in the order
 // that port writes them. Shadowsocks 2022 is the case it exists for — the
 // password a client sends is the server's PSK and the client's own, joined —
@@ -307,7 +307,7 @@ type UpstreamDecl struct {
 }
 
 // UpstreamDecls is a service or export manifest's `upstream` mapping: name to
-// declaration, mirroring SelfDecls. A name dgs does not understand is an
+// declaration, mirroring SelfDecls. A name rhumb does not understand is an
 // error rather than something skipped, because silently dropping a credential
 // a program needs renders a file that looks right and does not authenticate.
 type UpstreamDecls map[string]UpstreamDecl
@@ -329,7 +329,7 @@ func (d UpstreamDecls) Wants(what string) bool {
 	return ok
 }
 
-// KindOpaque is the one Secret.Kind dgs never generates: a private key, a
+// KindOpaque is the one Secret.Kind rhumb never generates: a private key, a
 // certificate chain, a vendor's keyfile. Its path is implied like any
 // other, so sync reports it missing until someone writes it, and sync never
 // invents a value nothing but a certificate authority can produce.
@@ -339,12 +339,12 @@ const KindOpaque = "opaque"
 // one value, a family of values, a record of fields, or both.
 type SelfDecl struct {
 	// Secret is this name's shape, where it differs from the service's own
-	// Secret block. Kind KindOpaque means a value dgs never generates.
+	// Secret block. Kind KindOpaque means a value rhumb never generates.
 	Secret `yaml:",inline"`
 	// Set is true when the name is a family of values whose keys each
 	// instance declares: one file per key, <instance>/self/<name>/<key>.
 	// Two ports of one program handing out different PSKs is what this is
-	// for. See docs/apps/conf/inventory.md#a-secret-several-people-hold.
+	// for. See docs/inventory.md#a-secret-several-people-hold.
 	Set bool `yaml:"set"`
 	// Fields is one credential made of several generated parts, each with
 	// its own shape — a uuid beside a password — one file each. With Set,
@@ -405,7 +405,7 @@ type Export struct {
 // access and carries their credential; this belongs to an instance written
 // in a node file, is rendered because that instance runs in a container, and
 // holds no credential at all. See
-// docs/apps/conf/export.md#a-second-file-what-deploys-it.
+// docs/export.md#a-second-file-what-deploys-it.
 type Deploy struct {
 	// Defaults is DefaultsDocument or DefaultsElement, and applies to
 	// every file: one deploy/defaults.yaml is merged once and handed to
@@ -627,7 +627,7 @@ func loadExport(path string) (*Export, error) {
 	return &e, nil
 }
 
-// checkUpstream rejects a name dgs does not understand. Skipping one would
+// checkUpstream rejects a name rhumb does not understand. Skipping one would
 // leave a template asking for a credential that is simply absent, and a
 // configuration that renders and then fails to authenticate is worse to
 // diagnose than a manifest that will not load.

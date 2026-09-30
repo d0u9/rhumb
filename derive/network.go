@@ -11,7 +11,7 @@ import (
 
 // ResolveAddress is the address rule an edge follows, for a caller that is
 // not an edge: a dial. See
-// docs/apps/conf/inventory.md#dialling-a-service-that-is-not-on-a-route.
+// docs/inventory.md#dialling-a-service-that-is-not-on-a-route.
 func ResolveAddress(inv *inventory.Root, from inventory.Instance, fromNode inventory.Node, to inventory.Instance, toNode inventory.Node) (address, network string, err error) {
 	address, network, _, err = resolveEndpoint(from, fromNode, to, toNode, inv.Networks, inv.Universal)
 	return address, network, err
@@ -52,7 +52,7 @@ type Name struct {
 
 // Names is every network's name table, in name order, and the conflicts
 // rule 30 reports: one name reaching two addresses on one network. See
-// docs/apps/conf/inventory.md#names-on-a-network.
+// docs/inventory.md#names-on-a-network.
 //
 // fansOut says whether an instance is a proxy dispatching by name; only a
 // route entered through one moves a name to the proxy's node, since a relay
@@ -110,7 +110,7 @@ func Names(inv *inventory.Root, fansOut func(instance string) bool) (map[string]
 // network's table when the instance answering to it — the proxy in front of
 // the port, or the port's own instance when nothing fronts it — joins that
 // network at a fixed address. An address the runtime assigns is no record a
-// resolver can hold. See docs/apps/conf/inventory.md#names-on-a-network.
+// resolver can hold. See docs/inventory.md#names-on-a-network.
 //
 // A container network is a scope inside its node, so the tables are the
 // node's own: two nodes may each list a network of one name.
@@ -237,7 +237,7 @@ type Reservation struct {
 }
 
 // Reservations is every node and host on network with a mac, in address
-// order. See docs/apps/conf/inventory.md#what-the-router-is-given.
+// order. See docs/inventory.md#what-the-router-is-given.
 func Reservations(inv *inventory.Root, network string) []Reservation {
 	var out []Reservation
 	for _, n := range inv.Nodes {

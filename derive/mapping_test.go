@@ -7,7 +7,7 @@ import (
 	"github.com/d0u9/rhumb/inventory"
 )
 
-// mappingInventory holds the three cases docs/apps/conf/export.md#a-second-file-what-deploys-it
+// mappingInventory holds the three cases docs/export.md#a-second-file-what-deploys-it
 // names, on one node written at the given address:
 //
 //   - bin-sea01:web is entered only by the proxy on its own machine, and so

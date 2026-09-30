@@ -1,6 +1,5 @@
 // Package topology turns an inventory and its derivation into the
-// connectivity graph docs/apps/conf/inspect.md#the-connectivity-graph
-// describes: one container per node, one shape per instance, one edge per
+// connectivity graph an embedding program draws: one container per node, one shape per instance, one edge per
 // resolved connection. It reads no filesystem and knows nothing of the TUI
 // or the web page that render it.
 package topology

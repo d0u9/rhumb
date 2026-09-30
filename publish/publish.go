@@ -27,7 +27,7 @@ func Create(path string, data []byte, perm, dirPerm fs.FileMode) error {
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return err
 	}
-	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.dgs-part")
+	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.rhumb-part")
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func Replace(path string, data []byte, perm fs.FileMode) error {
 		perm = info.Mode().Perm()
 	}
 	dir := filepath.Dir(path)
-	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.dgs-part")
+	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.rhumb-part")
 	if err != nil {
 		return err
 	}

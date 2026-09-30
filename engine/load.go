@@ -6,7 +6,7 @@ import (
 	"github.com/d0u9/rhumb/inventory"
 )
 
-// Loaded is the bootstrap every dgs conf command starts from: the inventory,
+// Loaded is the bootstrap every rhumb command starts from: the inventory,
 // the service manifests, and their derivation. Inspect's views, the reports
 // and export all read the same one.
 type Loaded struct {

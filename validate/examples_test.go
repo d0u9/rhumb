@@ -12,7 +12,7 @@ import (
 )
 
 // TestExampleInventoryLoadsDerivesAndValidates is
-// docs/apps/conf/inventory.md milestone 11: a complete inventory under
+// docs/inventory.md milestone 11: a complete inventory under
 // examples/conf/, loaded by the test that loads every example — until this
 // exists, nothing has checked that the configuration the docs describe can
 // actually be written. It runs the whole pipeline confgen, inventory and

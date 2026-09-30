@@ -1,11 +1,11 @@
-// Package derive computes everything docs/apps/conf/inventory.md says is
+// Package derive computes everything docs/inventory.md says is
 // derived, never written by hand: export instances, edges between hops with
 // their resolved addresses, grants and per-port principal tables. It is a
 // pure function of an already-parsed inventory and the service manifests
 // its routes' entry hops name — it touches no filesystem itself.
 //
-// The rules are in docs/apps/conf/inventory.md#what-is-derived and
-// docs/apps/conf/inventory.md#networks-and-how-an-address-is-chosen.
+// The rules are in docs/inventory.md#what-is-derived and
+// docs/inventory.md#networks-and-how-an-address-is-chosen.
 package derive
 
 import (
@@ -34,7 +34,7 @@ func ParseHop(s string) (Hop, error) {
 }
 
 // PrincipalKind is what kind of thing a Principal is, per
-// docs/apps/conf/inventory.md#the-model.
+// docs/inventory.md#the-model.
 type PrincipalKind string
 
 const (
@@ -54,7 +54,7 @@ type Principal struct {
 	// for a person's credential, or an instance ID.
 	ID string
 	// Name is the account name a server-side render sees, per
-	// docs/apps/conf/inventory.md#managed-and-unmanaged-devices.
+	// docs/inventory.md#managed-and-unmanaged-devices.
 	Name string
 	// Group is whose this principal is: the node group for a device or for
 	// an instance relaying through, the user's own key for an unmanaged
@@ -108,7 +108,7 @@ type ExportInstance struct {
 	// ID, on the same node, if one exists — a derived instance has none of
 	// them by default. Values start from the profile's own, and an
 	// override's win over them key by key. See
-	// docs/apps/conf/inventory.md#what-is-derived.
+	// docs/inventory.md#what-is-derived.
 	Ports  inventory.Ports
 	Bind   string
 	Values map[string]any
@@ -124,7 +124,7 @@ type Edge struct {
 	FromInstance string
 	To           Hop
 	// Address is the address the From side dials, per
-	// docs/apps/conf/inventory.md#networks-and-how-an-address-is-chosen.
+	// docs/inventory.md#networks-and-how-an-address-is-chosen.
 	Address string
 	// Network is the network Address is on, or empty when the two ends share
 	// a node.
@@ -140,7 +140,7 @@ type Edge struct {
 	// forwards: a relay terminates nothing, so what a client dials and what
 	// it authenticates against are two different machines, and the file it
 	// is given is built from both. See
-	// docs/apps/conf/inventory.md#a-service-that-forwards.
+	// docs/inventory.md#a-service-that-forwards.
 	Terminal Hop
 }
 
@@ -380,7 +380,7 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 				// same one are one principal with one secret between them.
 				credential := n.CredentialOr()
 
-				// docs/apps/conf/inventory.md#which-export-a-person-receives:
+				// docs/inventory.md#which-export-a-person-receives:
 				// the service names every way it may be written out, and the
 				// node's `export` narrows to one of them; export: none
 				// narrows to nothing. A service naming none writes no file,
@@ -561,7 +561,7 @@ func upstreamPrincipal(inv *inventory.Root, inst inventory.Instance, terminal co
 }
 
 // dedupeGrants keeps one grant per (principal, instance, port), which is
-// what docs/apps/conf/inventory.md#what-is-derived states a grant is: one
+// what docs/inventory.md#what-is-derived states a grant is: one
 // credential for one party to reach one port. Two routes entering the same
 // port produce the pair twice — the person picks one route or the other and
 // connects with the same credential either way — and a caller counting the
@@ -580,7 +580,7 @@ func dedupeGrants(grants []Grant) []Grant {
 	return out
 }
 
-// resolveAddress is docs/apps/conf/inventory.md's address rule: the same
+// resolveAddress is docs/inventory.md's address rule: the same
 // node dials loopback; otherwise the downstream's address is used on the
 // first network, in networkPref's preference order, that the downstream has
 // an address on and the upstream can reach. The rule is one-directional —

@@ -104,7 +104,7 @@ func TestInit_NeverOverwrites(t *testing.T) {
 // with nothing to write to.
 func TestInit_NoRootIsAnErrorNamingTheKey(t *testing.T) {
 	err := Init(nil, &bytes.Buffer{}, nil, map[string]string{}, Settings{})
-	if err == nil || !strings.Contains(err.Error(), "conf.root") {
-		t.Fatalf("err = %v, want it to name conf.root", err)
+	if err == nil || !strings.Contains(err.Error(), "generator root") {
+		t.Fatalf("err = %v, want it to name the generator root", err)
 	}
 }

@@ -189,7 +189,7 @@ output: server.env
 	}
 }
 
-// TestLoad_UnknownUpstreamNameIsBroken covers a name dgs does not
+// TestLoad_UnknownUpstreamNameIsBroken covers a name rhumb does not
 // understand. Skipping it would leave a template asking for a credential
 // that is simply absent, and a file that renders and then fails to
 // authenticate is harder to diagnose than a manifest that will not load.

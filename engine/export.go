@@ -11,7 +11,7 @@ import (
 )
 
 // File is one target's rendered bytes, at the path they belong under
-// within an export — see docs/apps/conf/export.md#what-is-written.
+// within an export — see docs/export.md#what-is-written.
 type File struct {
 	Path  string
 	Bytes []byte

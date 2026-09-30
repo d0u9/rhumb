@@ -110,32 +110,32 @@ func TestCheckReport_NamesEveryKindOfProblem(t *testing.T) {
 	}
 }
 
-// TestCheckReport_WithoutASecretsStore covers conf.secrets unset. Every path
+// TestCheckReport_WithoutASecretsStore covers the secrets root unset. Every path
 // the inventory implies is still known and none can be checked, which is
 // worth one line rather than a clean bill of health.
 func TestCheckReport_WithoutASecretsStore(t *testing.T) {
 	var out bytes.Buffer
 	err := Check(&out, checkConfig(buildInspectRoot(t), ""))
 	if err == nil {
-		t.Fatalf("report = %q, want an unset conf.secrets to count as a problem", out.String())
+		t.Fatalf("report = %q, want an unset the secrets root to count as a problem", out.String())
 	}
-	if !strings.Contains(out.String(), "conf.secrets is not configured") {
+	if !strings.Contains(out.String(), "no secrets root given") {
 		t.Fatalf("report = %q, want it to name what is unset", out.String())
 	}
 }
 
-// TestCheckReport_WithoutARoot covers conf.root unset, which is not a
+// TestCheckReport_WithoutARoot covers the generator root unset, which is not a
 // problem with an inventory but the absence of one to check.
 func TestCheckReport_WithoutARoot(t *testing.T) {
 	var out bytes.Buffer
 	err := Check(&out, checkConfig("", ""))
-	if err == nil || !strings.Contains(err.Error(), "conf.root") {
-		t.Fatalf("err = %v, want it to name conf.root", err)
+	if err == nil || !strings.Contains(err.Error(), "generator root") {
+		t.Fatalf("err = %v, want it to name the generator root", err)
 	}
 }
 
 // TestTargetReport lists what the root holds without rendering anything,
-// which is what docs/apps/conf/export.md#targets-and-selectors asks of it.
+// which is what docs/export.md#targets-and-selectors asks of it.
 func TestTargetReport(t *testing.T) {
 	var out bytes.Buffer
 	if err := Targets(&out, checkConfig(buildInspectRoot(t), "")); err != nil {

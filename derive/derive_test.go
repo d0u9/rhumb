@@ -8,7 +8,7 @@ import (
 	"github.com/d0u9/rhumb/inventory"
 )
 
-// worked builds the inventory in docs/apps/conf/inventory.md, in full: the
+// worked builds the inventory in docs/inventory.md, in full: the
 // nodes under "Nodes", "What is derived" and the "Naming" convention's own
 // bin-sea01, plus users.yaml and routes.yaml as written there.
 func worked() *inventory.Root {
@@ -181,7 +181,7 @@ func TestDerive_ExportInstances(t *testing.T) {
 // override's own Values reach the derived ExportInstance untouched, the same
 // way Ports and Bind already do — the override is what a template's
 // service-specific parameters ride on for a derived instance, same as for an
-// authored one. See docs/apps/conf/inventory.md#an-instances-own-values.
+// authored one. See docs/inventory.md#an-instances-own-values.
 func TestDerive_ExportInstanceCarriesOverrideValues(t *testing.T) {
 	inv := worked()
 	for i := range inv.Nodes {
@@ -256,7 +256,7 @@ func TestDerive_GrantsAndPrincipalTables(t *testing.T) {
 }
 
 // TestDerive_ClientRole pins the resolution order at
-// docs/apps/conf/inventory.md#which-role-a-client-derives-as: a node's
+// docs/inventory.md#which-role-a-client-derives-as: a node's
 // client_role wins over a role's own reached_by, and export: none
 // derives nothing regardless of it. The grant exists either way.
 // TestDerive_ClientNarrowsToOneForm covers what a device's `client` does: the
@@ -698,7 +698,7 @@ func TestDerive_ProfilesWriteADeviceOutOncePerProfile(t *testing.T) {
 }
 
 // TestDerive_ForwarderIsDialedAndTheHopBehindItIsAuthenticatedAgainst pins
-// docs/apps/conf/inventory.md#a-service-that-forwards. A relay terminates
+// docs/inventory.md#a-service-that-forwards. A relay terminates
 // nothing, so a route entering one is written out as the service that ends
 // it, the grant belongs to that service's port, and the edge carries both
 // ends: what the client dials and what it authenticates against.

@@ -1,5 +1,5 @@
-// This file is `dgs conf reservations <network>`: what a network's router
-// is to be given. See docs/apps/conf/inventory.md#what-the-router-is-given.
+// This file is `rhumb reservations <network>`: what a network's router
+// is to be given. See docs/inventory.md#what-the-router-is-given.
 package cli
 
 import (
@@ -17,7 +17,7 @@ func Reservations(in io.Reader, out io.Writer, args []string, flags map[string]s
 	}
 	root := global.Root
 	if root == "" {
-		return fmt.Errorf("conf.root is not configured")
+		return fmt.Errorf("no generator root given")
 	}
 	l, err := engine.Load(root)
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 // RenderTarget runs the same rendering the export performs for one target:
 // its templates and role defaults from the service directory, and its render
 // context — node, instance, upstream, principals and own — from the
-// inventory's derivation and conf.secrets.
+// inventory's derivation and the secrets root.
 //
 // It returns one artefact per file the service declares. A program reading
 // two files is still one service, and both are rendered from one defaults
@@ -146,7 +146,7 @@ func (m Renderer) findTarget(instance string) (targetRef, error) {
 			return targetRef{}, fmt.Errorf("%s: %s", instance, t.Broken)
 		}
 		// An unmanaged user has no node, and their bundle is named for
-		// them instead — see docs/apps/conf/export.md#what-is-written.
+		// them instead — see docs/export.md#what-is-written.
 		node := t.Node
 		if node == "" {
 			node = t.User
@@ -285,7 +285,7 @@ func (m Renderer) principalsFor(instance string) (map[string][]render.Principal,
 
 	// A role whose template cannot emit two accounts for one principal
 	// declares rotation: disruptive — then a .previous value never becomes
-	// a second account. See docs/apps/conf/inventory.md#rotation.
+	// a second account. See docs/inventory.md#rotation.
 	rotatesInPlace := true
 	// A service whose inbound side does not authenticate has no account
 	// table and no credential under any of its ports: a grant on one of
@@ -366,7 +366,7 @@ func (m Renderer) UpstreamFor(instance string, wants confgen.UpstreamDecls) (map
 	// An instance whose own service forwards holds no credential at the hop
 	// it dials: derive granted it none, and there is no file under it. It
 	// reads an address and a port and moves bytes between them. See
-	// docs/apps/conf/inventory.md#a-service-that-forwards.
+	// docs/inventory.md#a-service-that-forwards.
 	relaying := false
 	if inst := m.InstanceByID(instance); inst != nil {
 		relaying = m.Data.Manifests[inst.Service].Forwards
@@ -516,7 +516,7 @@ func (m Renderer) UpstreamFor(instance string, wants confgen.UpstreamDecls) (map
 
 // destinationSelf is what instance's port hands to everything granted on
 // it, in the order it writes them, or nil when it hands out nothing. See
-// docs/apps/conf/inventory.md#a-secret-several-people-hold.
+// docs/inventory.md#a-secret-several-people-hold.
 func destinationSelf(m Renderer, instance, port string) []string {
 	for _, n := range m.Data.Inv.Nodes {
 		if n.Broken != "" {
@@ -571,7 +571,7 @@ func principalFor(m Renderer, instance string) (group, slot string) {
 // Renderer is everything rendering one target needs and nothing else: the
 // loaded inventory, the root its templates sit under, and the secrets store.
 // It is deliberately not a TUI model — the same rendering serves the inspect
-// page and `dgs conf export` on the command line, and only one of those has a
+// page and `rhumb export` on the command line, and only one of those has a
 // cursor.
 type Renderer struct {
 	Data       Loaded
@@ -716,7 +716,7 @@ type deployArtefact = artefact
 // cannot disagree about what the instance deploys with. No secret reaches
 // any of them: the credential is in the file beside them, and a deploy
 // template names that file rather than repeating what is in it. See
-// docs/apps/conf/export.md#a-second-file-what-deploys-it.
+// docs/export.md#a-second-file-what-deploys-it.
 func (m Renderer) deployFor(instance string) ([]deployArtefact, error) {
 	t, err := m.findTarget(instance)
 	if err != nil {
@@ -805,7 +805,7 @@ func (m Renderer) deployFor(instance string) ([]deployArtefact, error) {
 }
 
 // dialsFor is this instance's `dials`, resolved as an edge would be. See
-// docs/apps/conf/inventory.md#dialling-a-service-that-is-not-on-a-route.
+// docs/inventory.md#dialling-a-service-that-is-not-on-a-route.
 func (m Renderer) dialsFor(instance string) (map[string]render.Downstream, error) {
 	from, fromNode := m.realInstance(instance)
 	if from == nil || len(from.Dials) == 0 {

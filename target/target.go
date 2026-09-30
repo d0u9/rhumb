@@ -1,7 +1,7 @@
 // Package target lists the targets an inventory and its derivation hold,
 // and matches selectors against them. A target is one instance.
 //
-// The rules are in docs/apps/conf/export.md#targets-and-selectors.
+// The rules are in docs/export.md#targets-and-selectors.
 package target
 
 import (

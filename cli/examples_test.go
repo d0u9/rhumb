@@ -10,7 +10,7 @@ import (
 )
 
 // examplesRoot is examples/conf with a secrets store generated beside it, so
-// a test renders the example inventory the way `dgs conf export` would.
+// a test renders the example inventory the way `rhumb export` would.
 // internal/conf/validate checks the same tree loads, derives and validates;
 // this one checks it renders, which is the half a broken template breaks.
 func examplesRoot(t *testing.T) (root, secretsDir string) {
@@ -100,7 +100,7 @@ func TestExamples_EveryTargetRenders(t *testing.T) {
 }
 
 // TestExamples_HysteriaMasqueradeComesFromTheInstance pins
-// docs/apps/conf/export.md#two-kinds-of-defaults over the whole pipeline: the
+// docs/export.md#two-kinds-of-defaults over the whole pipeline: the
 // example server sets masquerade_url in its instance's values, and that is
 // what reaches the rendered file — not the service default it overrides.
 func TestExamples_HysteriaMasqueradeComesFromTheInstance(t *testing.T) {
@@ -146,7 +146,7 @@ func TestExamples_MicrobinAdminIsNotBasicAuth(t *testing.T) {
 }
 
 // TestExamples_ExportsDialThePortsPublishedName pins
-// docs/apps/conf/inventory.md#the-name-a-port-is-published-at from the client
+// docs/inventory.md#the-name-a-port-is-published-at from the client
 // side: two services on one node answer to names of their own, and each
 // export writes its service's name rather than the node's address.
 func TestExamples_ExportsDialThePortsPublishedName(t *testing.T) {
@@ -167,7 +167,7 @@ func TestExamples_ExportsDialThePortsPublishedName(t *testing.T) {
 }
 
 // TestExamples_ProfilesListenWhereTheirValuesSay pins
-// docs/apps/conf/inventory.md#a-device-with-several-profiles: the example
+// docs/inventory.md#a-device-with-several-profiles: the example
 // laptop's two profiles render one configuration each from the same export,
 // and each listens on its own profile's port rather than the defaults'.
 func TestExamples_ProfilesListenWhereTheirValuesSay(t *testing.T) {

@@ -1,7 +1,7 @@
-// This file is `dgs conf init`: the scaffold a generator root starts from.
+// This file is `rhumb init`: the scaffold a generator root starts from.
 // It writes the files an inventory cannot do without, each carrying the
 // comments that say what belongs in it, and nothing that has to be deleted
-// afterwards. See docs/apps/conf/inventory.md#starting-a-generator-root.
+// afterwards. See docs/inventory.md#starting-a-generator-root.
 package cli
 
 import (
@@ -15,10 +15,10 @@ import (
 	"github.com/d0u9/rhumb/inventory"
 )
 
-// Init runs `dgs conf init [<dir>] [--secrets <dir>] [--gitignore]`.
+// Init runs `rhumb init [<dir>] [--secrets <dir>] [--gitignore]`.
 //
 // It is a scaffold, not an example: every file it writes is a valid, empty
-// one, so `dgs conf --check` is clean the moment it finishes and nothing has
+// one, so `rhumb check` is clean the moment it finishes and nothing has
 // to be removed before real content goes in. A worked inventory to copy from
 // lives in examples/conf/ instead.
 //
@@ -30,7 +30,7 @@ func Init(_ io.Reader, out io.Writer, args []string, flags map[string]string, gl
 		root = args[0]
 	}
 	if root == "" {
-		return fmt.Errorf("no directory given and conf.root is not configured")
+		return fmt.Errorf("no directory given and no generator root set")
 	}
 
 	secrets := global.Secrets
@@ -50,7 +50,7 @@ func Init(_ io.Reader, out io.Writer, args []string, flags map[string]string, gl
 			planned[filepath.Join(secrets, ".gitignore")] = secretsGitignore
 		}
 	} else if flags["gitignore"] == "true" {
-		return fmt.Errorf("--gitignore writes into the secrets root, and neither --secrets nor conf.secrets gives one")
+		return fmt.Errorf("--gitignore writes into the secrets root, and no secrets root is set")
 	}
 
 	paths := make([]string, 0, len(planned))
@@ -81,9 +81,9 @@ func Init(_ io.Reader, out io.Writer, args []string, flags map[string]string, gl
 		fmt.Fprintf(out, "kept   %s\n", p)
 	}
 	if secrets == "" {
-		fmt.Fprintln(out, "\nno secrets root: conf.secrets is not configured and --secrets was not given.")
+		fmt.Fprintln(out, "\nno secrets root: --secrets was not given.")
 	}
-	fmt.Fprintf(out, "\nThe root holds no nodes and no services yet, so `dgs conf --check` has\nnothing to report. Add a machine under %s/, a program under %s/, and a way\nof handing that program's credential to a person under %s/<service>/%s/.\n",
+	fmt.Fprintf(out, "\nThe root holds no nodes and no services yet, so `rhumb check` has\nnothing to report. Add a machine under %s/, a program under %s/, and a way\nof handing that program's credential to a person under %s/<service>/%s/.\n",
 		inventory.NodesDir, confgen.ServicesDir, confgen.ServicesDir, confgen.ExportsDir)
 	return nil
 }
@@ -106,7 +106,7 @@ const networksSkeleton = `# The networks nodes belong to, most preferred first. 
 # ` + "`universal`" + ` names the one every node reaches without saying so. Leave it
 # out and nothing is implicit: every node then states what it reaches.
 #
-# Neither name is known to dgs. These are this inventory's own.
+# Neither name is known to rhumb. These are this inventory's own.
 
 networks:
   - name: internet
@@ -118,7 +118,7 @@ const usersSkeleton = `# People. Not Linux accounts, and not passwords.
 #
 #   access        the routes this person may use, by name
 #   credentials   their credentials, each against a note saying where it is
-#                 used — free text dgs never reads. Omitted, they have one
+#                 used — free text rhumb never reads. Omitted, they have one
 #                 called ` + "`default`" + `. A device names which one it uses, and two
 #                 devices naming the same one share a password.
 #   username      the account name services see. Defaults to the key here.
@@ -140,7 +140,7 @@ users: {}
 
 const routesSkeleton = `# Routes: one chain each, from where traffic enters to where it leaves,
 # written as an ordered list of hops. A hop is ` + "`<node>/<instance>:<port>`" + `, and each
-# adjacent pair is one edge whose address dgs works out from the two nodes.
+# adjacent pair is one edge whose address rhumb works out from the two nodes.
 #
 # A route's name is what a person sees when they pick a line in their client,
 # so keep the machine out of it — a route may enter one server today and its
@@ -169,7 +169,7 @@ Files sit one level down, in a directory naming whose machines these are:
 
 A directory naming a user in users.yaml is that person's devices, and fills
 "owner" for every file in it. One naming no user is whoever the machines
-belong to — a provider, a household, a company — and dgs reads nothing
+belong to — a provider, a household, a company — and rhumb reads nothing
 further into it. Only one level is read: a directory is a group, never a path.
 
 A server says where it can be reached:
@@ -196,7 +196,7 @@ For a node with many instances, the node may instead say:
 Each direct .yaml file in that directory defines one complete instance or a
 list of related instances.
 
-See docs/apps/conf/inventory.md#nodes.
+See docs/inventory.md#nodes.
 `
 
 const servicesReadme = `# services/
@@ -228,7 +228,7 @@ confgen.yaml declares what the renderer cannot infer:
 defaults.yaml holds what every instance of the service shares. What one
 instance needs to say differently goes in that instance's own values.
 
-See docs/apps/conf/export.md#the-service-manifest.
+See docs/export.md#the-service-manifest.
 
 ## exports/
 
@@ -263,7 +263,7 @@ device that can read a share URI means. json is the JSON a shadowsocks-rust
 client reads; sslocal is the program, and it is a service, because a home
 server deploys it.
 
-See docs/apps/conf/inventory.md#which-export-a-person-receives.
+See docs/inventory.md#which-export-a-person-receives.
 `
 
 const secretsReadme = `# The secrets store
@@ -285,10 +285,10 @@ This is a separate root from the generator root on purpose. A directory that
 is not under the repository cannot be committed by accident, which a
 .gitignore entry only promises.
 
-"dgs conf secret sync" fills in what the inventory implies and reports what it
+"rhumb secret sync" fills in what the inventory implies and reports what it
 no longer does. It never deletes.
 
-See docs/apps/conf/inventory.md#secrets.
+See docs/inventory.md#secrets.
 `
 
 const secretsGitignore = `# Everything here is a plaintext credential. Nothing in this directory

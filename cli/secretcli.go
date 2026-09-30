@@ -1,7 +1,7 @@
-// This file is `dgs conf secret sync`: keeping the secrets tree in step with
+// This file is `rhumb secret sync`: keeping the secrets tree in step with
 // what the inventory implies. The Secrets tab of the inspect page shows the
 // same comparison and writes nothing; this is the half that writes. See
-// docs/apps/conf/inventory.md#keeping-the-tree-in-step.
+// docs/inventory.md#keeping-the-tree-in-step.
 package cli
 
 import (
@@ -12,7 +12,7 @@ import (
 	"github.com/d0u9/rhumb/secretstore"
 )
 
-// Secret runs `dgs conf secret sync [--yes]`.
+// Secret runs `rhumb secret sync [--yes]`.
 //
 // Sync generates what is missing and never deletes what is orphaned: it
 // cannot tell a rename from a removal, and guessing wrong fails silently —
@@ -24,17 +24,17 @@ func Secret(in io.Reader, out io.Writer, args []string, flags map[string]string,
 	switch args[0] {
 	case "sync":
 	case "mv":
-		return fmt.Errorf("secret mv is not implemented yet: move the files yourself, then run `dgs conf secret sync` to confirm the tree is in step")
+		return fmt.Errorf("secret mv is not implemented yet: move the files yourself, then run `rhumb secret sync` to confirm the tree is in step")
 	default:
 		return fmt.Errorf("unknown secret command %q; the one that exists is `sync`", args[0])
 	}
 
 	root, secretsDir := global.Root, global.Secrets
 	if root == "" {
-		return fmt.Errorf("conf.root is not configured")
+		return fmt.Errorf("no generator root given")
 	}
 	if secretsDir == "" {
-		return fmt.Errorf("conf.secrets is not configured")
+		return fmt.Errorf("no secrets root given")
 	}
 
 	l, err := engine.Load(root)
@@ -67,7 +67,7 @@ func Secret(in io.Reader, out io.Writer, args []string, flags map[string]string,
 	}
 
 	// A path whose shape is opaque — a private key, a vendor's keyfile — is
-	// one dgs never invents. It stays missing, which is the report someone
+	// one rhumb never invents. It stays missing, which is the report someone
 	// acts on, so it is named apart from what is about to be written.
 	generated, opaque := secretstore.Generated(l.Inv, l.Manifests, res.Missing)
 
