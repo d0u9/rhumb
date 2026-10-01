@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/d0u9/rhumb/confgen"
 	"github.com/d0u9/rhumb/inventory"
 )
 
@@ -110,4 +111,25 @@ func (m *Model) addLinkMapping(e Edge) {
 		Link: e.Link, Key: key, Entrance: e.From, Target: e.To,
 		Address: e.Address, Container: e.Container, Port: e.Port, Routes: []string{e.Route},
 	})
+}
+
+// PortAuthenticates reports whether instance's port holds an account per
+// principal granted on it. A link's to port answers from the service's
+// link.to, every other port from the service's own auth: a port is a
+// route's or a link's, never both.
+func PortAuthenticates(manifest confgen.Manifest, m *Model, instance, port string) bool {
+	if m.IsLinkPort(instance, port) {
+		return manifest.LinkAuthenticates()
+	}
+	return manifest.Auth == confgen.AuthPerPrincipal
+}
+
+// IsLinkPort reports whether some link's to names instance's port.
+func (m *Model) IsLinkPort(instance, port string) bool {
+	for _, l := range m.Links {
+		if l.To.Instance == instance && l.To.Port == port {
+			return true
+		}
+	}
+	return false
 }

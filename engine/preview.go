@@ -312,19 +312,27 @@ func (m Renderer) principalsFor(instance string) (map[string][]render.Principal,
 	// asking the secrets tree for files nothing ever generates. A web
 	// service behind a reverse proxy is the case: the proxy holds a grant
 	// on its port and no credential for it.
-	authenticates := false
+	//
+	// Whether a port authenticates is the port's: a link's to port answers
+	// from link.to, so a relay that forwards route traffic unread still
+	// holds an account per link dialling it. See docs/links.md.
+	var role confgen.Manifest
+	known := false
 	if t, err := m.findTarget(instance); err == nil {
-		if role, ok := m.Data.Manifests[t.Service]; ok {
-			rotatesInPlace = role.Rotation != confgen.RotationDisruptive
-			authenticates = role.Auth == confgen.AuthPerPrincipal
-		}
+		role, known = m.Data.Manifests[t.Service]
+		rotatesInPlace = role.Rotation != confgen.RotationDisruptive
 	}
-	if !authenticates {
+	if !known {
 		return nil, nil
 	}
 
 	out := map[string][]render.Principal{}
+	authenticates := false
 	for port := range ports {
+		if !derive.PortAuthenticates(role, m.Data.Derived, instance, port) {
+			continue
+		}
+		authenticates = true
 		for _, p := range m.Data.Derived.Principals(instance, port) {
 			path := secretstore.Path{Instance: instance, Port: port, Group: p.Group, Name: p.Slot}
 			principal := render.Principal{Name: p.Name}
@@ -359,6 +367,9 @@ func (m Renderer) principalsFor(instance string) (map[string][]render.Principal,
 				}
 			}
 		}
+	}
+	if !authenticates {
+		return nil, nil
 	}
 	return out, nil
 }

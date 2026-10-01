@@ -587,3 +587,41 @@ func writeSecretFile(t *testing.T, root, rel, value string) {
 		t.Fatal(err)
 	}
 }
+
+// A link port on a forwarding service authenticates by link.to, though the
+// service's own auth is none; renaming the link moves nothing.
+func TestImpliedPaths_LinkPort(t *testing.T) {
+	root := filepath.Join("..", "docs", "fixtures", "reverse-exit", "conf")
+	inv, err := inventory.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg, err := confgen.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifests := map[string]confgen.Manifest{}
+	for _, s := range cg.Services {
+		manifests[s.Name] = s.Manifest
+	}
+	paths := func() []string {
+		model, err := derive.Derive(inv, manifests)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, p := range ImpliedPaths(inv, manifests, model) {
+			out = append(out, p.String())
+		}
+		return out
+	}
+	want := []string{"home/ss-home/users/alice/default", "nce/relay-nce/agents/home-agent-home/default"}
+	if got := paths(); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("paths = %v, want %v", got, want)
+	}
+	inv.Links["renamed"] = inv.Links["home-nce"]
+	delete(inv.Links, "home-nce")
+	if got := paths(); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("after rename, paths = %v, want %v", got, want)
+	}
+}
