@@ -110,15 +110,21 @@ func (m *Model) Mappings(inv *inventory.Root, instance string) map[string]Mappin
 			if e.Container != "" {
 				continue
 			}
-			from := e.From.Instance
-			if from == "" {
-				from = e.FromInstance
-			}
-			if nodeOf[from] == node.ID {
+			// What matters is who dials: for an edge riding a link that is
+			// the link's far end, on this node, not the route's From.
+			if nodeOf[e.DialerOr()] == node.ID {
 				local = true
 				continue
 			}
 			networks[e.Network] = true
+		}
+		// A link's to port is entered from the other node, over the network
+		// the link resolved on, as a route's entrance is.
+		for _, l := range m.Links {
+			if l.To.Instance == instance && l.To.Port == name {
+				entered = true
+				networks[l.Network] = true
+			}
 		}
 
 		var addresses []string

@@ -141,3 +141,22 @@ func TestDerive_LinkMappingsDeduplicateAndFarEndMayBeTarget(t *testing.T) {
 		t.Fatalf("Edge = %+v", e)
 	}
 }
+
+func TestMappings_FollowWhoDials(t *testing.T) {
+	inv, manifests := fixture(t, "")
+	m, err := Derive(inv, manifests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relay := m.Mappings(inv, "nce/relay-nce")
+	for _, port := range []string{"agents", "home"} {
+		if got := relay[port].Addresses; len(got) != 1 || got[0] == PublishLoopback {
+			t.Fatalf("relay %s = %+v, want the internet address only", port, relay[port])
+		}
+	}
+	// ss-home is a host process dialled by agent-home beside it: loopback
+	// only, never a public address.
+	if got := m.Mappings(inv, "home/ss-home")["users"].Addresses; len(got) != 1 || got[0] != PublishLoopback {
+		t.Fatalf("ss-home users = %v, want loopback only", got)
+	}
+}
