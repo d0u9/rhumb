@@ -641,6 +641,10 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		}
 	}
 
+	for _, issue := range linkIssues(inv, manifests, realInstances) {
+		add("%s", issue)
+	}
+
 	// Rule 34: every set's members are routes, and every @set named in an
 	// access list is a set.
 	setNames := make([]string, 0, len(inv.Sets))
@@ -1321,9 +1325,9 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		}
 	}
 
-	// Rule 14: two instances on one node do not bind the same address and
-	// port. Protocol is not modelled yet, so this checks address and port
-	// only — a stricter check than the rule asks for, never a looser one.
+	// Rule 14: two instances on one node do not bind the same address,
+	// port and protocol. A link's to port is one of its instance's ports, so
+	// it is checked here like any other.
 	type bound struct {
 		bind     string
 		port     int
@@ -1401,6 +1405,103 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 	}
 
 	return issues
+}
+
+// linkIssues is rules 37, 39 and 40 for links.yaml; derive enforces 38 and
+// 41, since an edge that resolves no address has no model to validate. See
+// docs/links.md#validation.
+func linkIssues(inv *inventory.Root, manifests map[string]confgen.Manifest, real map[string]instRef) []string {
+	var out []string
+	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
+	if inv.LinksBroken != "" {
+		add("links.yaml will not parse: %s", inv.LinksBroken)
+	}
+
+	names := make([]string, 0, len(inv.Links))
+	for name := range inv.Links {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Rule 37: the ends exist, run on different nodes, and their services
+	// declare the ends they are.
+	toPorts := map[string]bool{}
+	// ends[instance][node] is the links instance ends whose other end runs
+	// on node, for rule 40.
+	ends := map[string]map[string][]string{}
+	for _, name := range names {
+		l := inv.Links[name]
+		from, okFrom := real[l.From]
+		if !okFrom {
+			add("link %q: from %q is not an authored instance", name, l.From)
+		}
+		hop, err := derive.ParseHop(l.To)
+		if err != nil {
+			add("link %q: %s", name, err)
+			continue
+		}
+		to, okTo := real[hop.Instance]
+		if !okTo {
+			add("link %q: to %q is not an authored instance", name, hop.Instance)
+		} else if _, ok := to.inst.Ports[hop.Port]; !ok {
+			add("link %q: %s has no port %q", name, hop.Instance, hop.Port)
+		}
+		if !okFrom || !okTo {
+			continue
+		}
+		if from.nodeID == to.nodeID {
+			add("link %q: both ends run on %s; two instances on one node need no link", name, from.nodeID)
+		}
+		if !manifests[from.inst.Service].LinkFrom() {
+			add("link %q: from %s: service %s does not declare link.from", name, l.From, from.inst.Service)
+		}
+		if !manifests[to.inst.Service].LinkTo() {
+			add("link %q: to %s: service %s does not declare link.to", name, hop.Instance, to.inst.Service)
+		}
+		toPorts[hop.Instance+":"+hop.Port] = true
+		for _, pair := range [][2]string{{l.From, to.nodeID}, {hop.Instance, from.nodeID}} {
+			if ends[pair[0]] == nil {
+				ends[pair[0]] = map[string][]string{}
+			}
+			ends[pair[0]][pair[1]] = append(ends[pair[0]][pair[1]], name)
+		}
+	}
+
+	// Rule 39: a port is a route's or a link's, never both.
+	routeNames := make([]string, 0, len(inv.Routes))
+	for name := range inv.Routes {
+		routeNames = append(routeNames, name)
+	}
+	sort.Strings(routeNames)
+	for _, name := range routeNames {
+		for _, raw := range inv.Routes[name].Hops {
+			if hop, err := derive.ParseHop(raw); err == nil && toPorts[hop.Instance+":"+hop.Port] {
+				add("route %q: hop %s is a link's to port; a port is a route's or a link's, never both", name, raw)
+			}
+		}
+	}
+
+	// Rule 40: one link per instance and node, or an edge from it there
+	// rides one chosen by nothing.
+	instances := make([]string, 0, len(ends))
+	for id := range ends {
+		instances = append(instances, id)
+	}
+	sort.Strings(instances)
+	for _, id := range instances {
+		nodes := make([]string, 0, len(ends[id]))
+		for node := range ends[id] {
+			nodes = append(nodes, node)
+		}
+		sort.Strings(nodes)
+		for _, node := range nodes {
+			if links := ends[id][node]; len(links) > 1 {
+				add("%s ends links %s whose other end runs on %s; an edge from it there would ride one chosen by nothing",
+					id, strings.Join(links, ", "), node)
+			}
+		}
+	}
+	return out
 }
 
 // sevenDays is rule 16's staleness limit for a .previous file.
