@@ -230,6 +230,43 @@ type Manifest struct {
 	// authenticate, so declaring this hands it nothing. See
 	// docs/inventory.md#a-service-that-fans-out.
 	Downstreams string `yaml:"downstreams"`
+	// Link declares that an instance of this service may end a link: a
+	// session between two instances on two nodes that route traffic travels
+	// inside. Nil when it ends none. See docs/links.md.
+	Link *LinkDecl `yaml:"link"`
+}
+
+// LinkDecl is a manifest's `link`: which ends of a link an instance of the
+// service may be. At least one is written.
+type LinkDecl struct {
+	// From, when written, says an instance may be a link's `from`, the end
+	// that dials. Its map is what that end needs from the port it dials,
+	// under the names Upstream uses and for the same reason: the declaration
+	// is the consumer's.
+	From *UpstreamDecls `yaml:"from"`
+	// To, when written, says an instance may be a link's `to`.
+	To *LinkTo `yaml:"to"`
+}
+
+// LinkTo is what a link's receiving end declares about the ports links
+// enter. It is separate from the service's own Auth, which describes the
+// ports routes enter: a port is a route's or a link's, never both.
+type LinkTo struct {
+	// Auth is AuthPerPrincipal or AuthNone, as the service's own Auth is,
+	// for the ports links enter.
+	Auth string `yaml:"auth"`
+}
+
+// LinkFrom reports whether an instance of this service may be a link's from.
+func (m Manifest) LinkFrom() bool { return m.Link != nil && m.Link.From != nil }
+
+// LinkTo reports whether an instance of this service may be a link's to.
+func (m Manifest) LinkTo() bool { return m.Link != nil && m.Link.To != nil }
+
+// LinkAuthenticates reports whether a link port of this service holds an
+// account per dialling instance.
+func (m Manifest) LinkAuthenticates() bool {
+	return m.LinkTo() && m.Link.To.Auth == AuthPerPrincipal
 }
 
 // Terminates reports whether an instance of this service is the end of what
@@ -646,6 +683,30 @@ func loadExport(path string) (*Export, error) {
 	return &e, nil
 }
 
+// checkLink rejects a `link` that names neither end, and checks each end as
+// the service-wide declarations it mirrors are checked.
+func checkLink(path string, l *LinkDecl) error {
+	if l == nil {
+		return nil
+	}
+	if l.From == nil && l.To == nil {
+		return fmt.Errorf("parsing %s: link names neither from nor to", path)
+	}
+	if l.From != nil {
+		if err := checkUpstream(path, *l.From); err != nil {
+			return err
+		}
+	}
+	if l.To != nil {
+		switch l.To.Auth {
+		case AuthPerPrincipal, AuthNone, "":
+		default:
+			return fmt.Errorf("parsing %s: link.to auth %q is not %q or %q", path, l.To.Auth, AuthPerPrincipal, AuthNone)
+		}
+	}
+	return nil
+}
+
 // checkUpstream rejects a name rhumb does not understand. Skipping one would
 // leave a template asking for a credential that is simply absent, and a
 // configuration that renders and then fails to authenticate is worse to
@@ -786,6 +847,9 @@ func loadManifest(path string) (*Manifest, error) {
 		return nil, err
 	}
 	if err := checkUpstream(path, m.Upstream); err != nil {
+		return nil, err
+	}
+	if err := checkLink(path, m.Link); err != nil {
 		return nil, err
 	}
 	return &m, nil

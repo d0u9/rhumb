@@ -610,3 +610,61 @@ func TestLoad_AccountsWithoutAnAccountTableIsBroken(t *testing.T) {
 		t.Fatalf("Broken = %q, want it to say there is no account to name", got.Services[0].Broken)
 	}
 }
+
+func TestLoad_LinkIsRead(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ServicesDir, "relay", ManifestFilename), `
+auth: none
+forwards: true
+link:
+  from:
+    values: {}
+  to:
+    auth: per-principal
+`)
+	got, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	s := got.Services[0]
+	if s.Broken != "" {
+		t.Fatalf("Broken = %q", s.Broken)
+	}
+	m := s.Manifest
+	if !m.LinkFrom() || !m.LinkTo() || !m.Link.From.Wants(UpstreamValues) || m.Link.To.Auth != AuthPerPrincipal {
+		t.Fatalf("Link = %+v", m.Link)
+	}
+}
+
+func TestLoad_NoLinkIsNeitherEnd(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ServicesDir, "ss", ManifestFilename), "auth: per-principal\n")
+	got, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if m := got.Services[0].Manifest; m.LinkFrom() || m.LinkTo() {
+		t.Fatalf("Link = %+v, want neither end", m.Link)
+	}
+}
+
+func TestLoad_BrokenLink(t *testing.T) {
+	for name, link := range map[string]string{
+		"unknown key":     "link:\n  via: x\n",
+		"unknown from":    "link:\n  from:\n    secret: {}\n",
+		"unknown to auth": "link:\n  to:\n    auth: maybe\n",
+		"empty link":      "link: {}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, filepath.Join(root, ServicesDir, "x", ManifestFilename), "auth: none\n"+link)
+			got, err := Load(root)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got.Services[0].Broken == "" {
+				t.Fatal("Broken = empty, want an error")
+			}
+		})
+	}
+}
