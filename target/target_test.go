@@ -1,6 +1,7 @@
 package target
 
 import (
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -319,4 +320,35 @@ func TestRoutes_NarrowsAProfilesProgram(t *testing.T) {
 	if got, _ := Routes("node:mac", matched); got != nil {
 		t.Fatalf("no route term narrowed %v", got)
 	}
+}
+
+// agent-home is no route's hop, but it carries home-exit's mapping, so
+// selecting that route selects it.
+func TestList_LinkEndCarriesItsRoutes(t *testing.T) {
+	root := filepath.Join("..", "docs", "fixtures", "reverse-exit", "conf")
+	inv, err := inventory.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg, err := confgen.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifests := map[string]confgen.Manifest{}
+	for _, s := range cg.Services {
+		manifests[s.Name] = s.Manifest
+	}
+	model, err := derive.Derive(inv, manifests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tg := range List(inv, model) {
+		if tg.Instance == "home/agent-home" {
+			if len(tg.Routes) != 1 || tg.Routes[0] != "home-exit" {
+				t.Fatalf("Routes = %v, want [home-exit]", tg.Routes)
+			}
+			return
+		}
+	}
+	t.Fatal("agent-home not listed")
 }

@@ -87,7 +87,7 @@ func List(inv *inventory.Root, model *derive.Model) []Target {
 				User:     n.Owner,
 				Service:  inst.Service,
 				Instance: inst.ID,
-				Routes:   routesContaining(inv, inst.ID),
+				Routes:   routesContaining(inv, model, inst.ID),
 			})
 		}
 	}
@@ -120,19 +120,40 @@ func valueOr(v, fallback string) string {
 	return fallback
 }
 
-// routesContaining is every route naming instance as any of its hops.
-func routesContaining(inv *inventory.Root, instance string) []string {
-	var routes []string
+// routesContaining is every route naming instance as any of its hops, and
+// every route with an edge riding a link instance ends: a link's from end
+// is no route's hop, yet its configuration carries the route's mapping.
+func routesContaining(inv *inventory.Root, model *derive.Model, instance string) []string {
+	seen := map[string]bool{}
 	for name, route := range inv.Routes {
 		for _, raw := range route.Hops {
 			hop, err := derive.ParseHop(raw)
 			if err == nil && hop.Instance == instance {
-				routes = append(routes, name)
+				seen[name] = true
 				break
 			}
 		}
 	}
+	for _, l := range model.Links {
+		if l.From != instance && l.To.Instance != instance {
+			continue
+		}
+		for _, mp := range model.LinkMappings {
+			if mp.Link == l.Name {
+				for _, r := range mp.Routes {
+					seen[r] = true
+				}
+			}
+		}
+	}
+	routes := make([]string, 0, len(seen))
+	for name := range seen {
+		routes = append(routes, name)
+	}
 	sort.Strings(routes)
+	if len(routes) == 0 {
+		return nil
+	}
 	return routes
 }
 
