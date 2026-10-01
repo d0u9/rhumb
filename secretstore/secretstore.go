@@ -109,7 +109,7 @@ func ImpliedPaths(inv *inventory.Root, manifests map[string]confgen.Manifest, mo
 	}
 
 	for _, g := range model.Grants {
-		if roleOf[g.Instance].Auth != confgen.AuthPerPrincipal {
+		if !derive.PortAuthenticates(roleOf[g.Instance], model, g.Instance, g.Port) {
 			continue
 		}
 		add(Path{Instance: g.Instance, Port: g.Port, Group: g.Principal.Group, Name: g.Principal.Slot})
