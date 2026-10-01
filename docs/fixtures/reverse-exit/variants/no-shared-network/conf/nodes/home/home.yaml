@@ -1,7 +1,7 @@
 # Changed: the agent in a container, the exit a host process on loopback.
 id: home
 networks:
-  home: 10.0.0.20
+  lan: 10.0.0.20
 containers:
   - {name: apps, subnet: 172.29.0.0/24}
 instances:

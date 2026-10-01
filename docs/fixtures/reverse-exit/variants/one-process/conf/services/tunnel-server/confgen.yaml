@@ -1,0 +1,8 @@
+# The far end of a forward tunnel.
+auth: none
+link:
+  to:
+    auth: per-principal
+secret:
+  kind: base64
+  bytes: 32

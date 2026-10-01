@@ -2,7 +2,7 @@
 # through `universal`, which is all a link's `from` needs (rule 38).
 id: home
 networks:
-  home: 10.0.0.20
+  lan: 10.0.0.20
 instances:
   # Listens on nothing. Opens the session to the relay and dials ss-home for
   # every flow the relay sends down it.

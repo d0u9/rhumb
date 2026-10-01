@@ -191,6 +191,10 @@ type Input struct {
 	// Names is every network's name table, by network, read with
 	// names "<network>".
 	Names map[string][]Name
+	// Members is, for a process, each instance it runs, in ID order, with
+	// what that instance would have been given on its own. Empty for every
+	// other instance. See docs/inventory.md#processes.
+	Members []Member
 	// Links is every link this instance ends, by name, read with links or
 	// link "<name>". Empty for an instance ending none.
 	Links []Link
@@ -354,4 +358,18 @@ type LinkEndpoint struct {
 	Protocol  string
 	Address   string
 	Published string
+}
+
+// Member is one instance a process runs, as a template for the process reads
+// it with members. Each field is what the instance's own render would carry.
+type Member struct {
+	Name        string
+	Service     string
+	Instance    map[string]any
+	Upstream    map[string]any
+	Downstreams []Downstream
+	Links       []Link
+	Principals  map[string][]Principal
+	Published   map[string]string
+	Dials       map[string]Downstream
 }

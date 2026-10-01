@@ -1,0 +1,25 @@
+# Changed: the relay is two instances, one per mode, run by one program.
+id: nce
+networks:
+  internet: nce.example.net
+processes:
+  xray-nce:
+    service: xray
+instances:
+  # Reverse: accepts the home agent, sends client traffic down its session.
+  - id: relay-nce
+    service: reverse-relay
+    process: xray-nce
+    ports:
+      agents: 40000
+      home:
+        port: 40001
+        published: nce.example.net
+  # Forward: wraps what enters on sea and carries it to San Francisco.
+  - id: tunnel-nce
+    service: tunnel-client
+    process: xray-nce
+    ports:
+      sea:
+        port: 40002
+        published: nce.example.net

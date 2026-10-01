@@ -126,6 +126,17 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 		return nil, err
 	}
 
+	var members []render.Member
+	if inst := m.InstanceByID(instance); inst != nil {
+		for _, id := range inst.Members {
+			mb, err := m.memberFor(id)
+			if err != nil {
+				return nil, err
+			}
+			members = append(members, mb)
+		}
+	}
+
 	out := make([]artefact, 0, len(files))
 	for _, file := range files {
 		templatePath := filepath.Join(dir, file.Template)
@@ -147,6 +158,7 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 			PublishedNames: m.publishedNamesFor(instance),
 			Dials:          dials,
 			Links:          links,
+			Members:        members,
 			Names:          m.names(t.Node),
 			Principals:     principals,
 			Self:           own,
@@ -324,8 +336,16 @@ func (m Renderer) principalsFor(instance string) (map[string][]render.Principal,
 	// holds an account per link dialling it. See docs/links.md.
 	var role confgen.Manifest
 	known := false
-	if t, err := m.findTarget(instance); err == nil {
-		role, known = m.Data.Manifests[t.Service]
+	// A process's member is no target of its own, so its service is read
+	// from the instance itself.
+	service := ""
+	if inst := m.InstanceByID(instance); inst != nil {
+		service = inst.Service
+	} else if t, err := m.findTarget(instance); err == nil {
+		service = t.Service
+	}
+	if service != "" {
+		role, known = m.Data.Manifests[service]
 		rotatesInPlace = role.Rotation != confgen.RotationDisruptive
 	}
 	if !known {

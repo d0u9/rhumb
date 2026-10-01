@@ -181,6 +181,11 @@ type Instance struct {
 	// principals and its own grants, and one process. Empty means this
 	// instance is a process of its own.
 	Process string `yaml:"process"`
+	// Members is set on the instance Load makes for an entry of a node's
+	// processes, and names its member instances, sorted. That instance is
+	// what renders and deploys; its members render nothing of their own.
+	// Empty on every authored instance.
+	Members []string `yaml:"-"`
 	// Values is this instance's own parameters — a Hysteria2 masquerade
 	// target, a MicroBin public path, an nginx server block — whatever its
 	// service and role need beyond where it runs and what it listens on.
@@ -571,8 +576,14 @@ type Node struct {
 	// docs/inventory.md#a-device-with-several-profiles.
 	Profiles map[string]Profile `yaml:"profiles"`
 	// Instances is what the node runs, written inline or read from the
-	// directory the node names. decodeNode fills it; see instancesRef.
+	// directory the node names. decodeNode fills it; see instancesRef. Load
+	// appends one instance per entry of Processes, standing for the program
+	// that runs its members; see Instance.Members.
 	Instances []Instance `yaml:"-"`
+	// Processes is the programs on this node that run several instances as
+	// one: one configuration file, one container or unit. Keyed by the name
+	// the members' `process` gives. See docs/inventory.md#processes.
+	Processes map[string]Process `yaml:"processes"`
 	// Credential names which of its owner's credentials this device uses.
 	// Empty means DefaultCredential. Two devices naming the same one hold
 	// the same secret — one password across a laptop and a phone is a thing
@@ -923,6 +934,7 @@ func loadNodes(root string) ([]Node, error) {
 		}
 		node.Group = group
 		qualifyInstances(&node)
+		addProcesses(&node)
 		nodes = append(nodes, node)
 	}
 	for _, entry := range entries {
@@ -1216,6 +1228,58 @@ func decodeStrict(data []byte, v any) error {
 
 // QualifiedSep separates a node from an instance name in an instance's ID.
 const QualifiedSep = "/"
+
+// Process is one entry of a node's processes: the program running its
+// members. Values and Deploy are the program's own, as an instance's are.
+type Process struct {
+	Service string         `yaml:"service"`
+	Values  map[string]any `yaml:"values"`
+	Deploy  map[string]any `yaml:"deploy"`
+}
+
+// addProcesses appends one instance per declared process. Its ports are its
+// members', which a process keeps distinct; what runs it, the container
+// networks it joins and its bind are its first member's, which validate
+// requires every member to share. A process no instance names still gets an
+// instance, so validate can report it.
+func addProcesses(node *Node) {
+	if node.Broken != "" || len(node.Processes) == 0 {
+		return
+	}
+	names := make([]string, 0, len(node.Processes))
+	for name := range node.Processes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		decl := node.Processes[name]
+		proc := Instance{
+			Name: name, ID: node.ID + QualifiedSep + name, Service: decl.Service,
+			Values: decl.Values, Deploy: decl.Deploy, Path: node.Path, Ports: Ports{},
+		}
+		for _, inst := range node.Instances {
+			if inst.Process != name || len(inst.Members) > 0 {
+				continue
+			}
+			if len(proc.Members) == 0 {
+				proc.Runtime, proc.Containers, proc.Bind = inst.Runtime, inst.Containers, inst.Bind
+			}
+			proc.Members = append(proc.Members, inst.ID)
+			for port, p := range inst.Ports {
+				// The name a port is published at stays its member's: the
+				// process holds the number, not a second claim on the name.
+				p.Published, p.Self = "", nil
+				if _, taken := proc.Ports[port]; !taken {
+					proc.Ports[port] = p
+				}
+			}
+		}
+		if proc.Runtime == "" {
+			proc.Runtime = node.Runtime
+		}
+		node.Instances = append(node.Instances, proc)
+	}
+}
 
 // LocalName is the part of an instance ID after its node: what the instance
 // file wrote, and what names its container, its export directory and its

@@ -62,6 +62,7 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 		},
 		"downstreams": func() []Downstream { return in.Downstreams },
 		"links":       func() []Link { return in.Links },
+		"members":     func() []Member { return in.Members },
 		"link": func(name string) (Link, error) {
 			for _, l := range in.Links {
 				if l.Name == name {

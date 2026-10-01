@@ -1,0 +1,5 @@
+# The program: renders one file for every instance in its process.
+auth: none
+template: templates/config.txt.tmpl
+defaults: document
+output: config.txt

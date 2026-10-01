@@ -1,0 +1,6 @@
+routes:
+  home-exit:
+    hops: [nce/relay-nce:home, home/ss-home:users]
+  # Added.
+  sea-exit:
+    hops: [nce/tunnel-nce:sea, sea/ss-sea:users]

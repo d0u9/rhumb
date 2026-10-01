@@ -1243,3 +1243,42 @@ func realOf(inv *inventory.Root) map[string]instRef {
 	}
 	return out
 }
+
+func TestValidate_ProcessRules(t *testing.T) {
+	load := func() *inventory.Root {
+		inv, err := inventory.Load(filepath.Join("..", "docs", "fixtures", "reverse-exit", "variants", "one-process", "conf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return inv
+	}
+	_, manifests := reverseExit(t, "one-process")
+	nce := func(inv *inventory.Root) *inventory.Node {
+		for i := range inv.Nodes {
+			if inv.Nodes[i].ID == "nce" {
+				return &inv.Nodes[i]
+			}
+		}
+		t.Fatal("no nce")
+		return nil
+	}
+	for name, tc := range map[string]struct {
+		edit func(*inventory.Node)
+		want string
+	}{
+		"clean":      {func(*inventory.Node) {}, ""},
+		"undeclared": {func(n *inventory.Node) { n.Instances[0].Process = "other" }, `process "other" is not one of`},
+		"runtime":    {func(n *inventory.Node) { n.Instances[0].Runtime = inventory.RuntimeDocker }, "differ in runtime"},
+		"number":     {func(n *inventory.Node) { n.Instances[1].Ports = inventory.PortsOf(map[string]int{"sea": 40000}) }, "both listen on 40000/tcp"},
+		"no service": {func(n *inventory.Node) { n.Instances[len(n.Instances)-1].Service = "" }, "names no service"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			inv := load()
+			tc.edit(nce(inv))
+			joined := strings.Join(processIssues(inv, manifests), "\n")
+			if tc.want == "" && joined != "" || !strings.Contains(joined, tc.want) {
+				t.Fatalf("issues = %q, want %q", joined, tc.want)
+			}
+		})
+	}
+}
