@@ -123,6 +123,9 @@ func BrokenFiles(inv *inventory.Root) []string {
 	if inv.RoutesBroken != "" {
 		out = append(out, "routes.yaml: "+inv.RoutesBroken)
 	}
+	if inv.LinksBroken != "" {
+		out = append(out, "links.yaml: "+inv.LinksBroken)
+	}
 	if inv.NetworksBroken != "" {
 		out = append(out, "networks.yaml: "+inv.NetworksBroken)
 	}
