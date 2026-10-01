@@ -1,9 +1,12 @@
 # Configuration: Links
 
-**Status: proposal.** Nothing on this page is implemented.
-[inventory.md](inventory.md) describes what rhumb does today, and where the two
-disagree it is right; this page is the change being argued for. When the change
-lands, this page is folded into inventory.md and deleted.
+**Status: implemented, with open questions.** Steps 1 to 9 of [the
+implementation](#implementation) are in place; step 10, a link in
+`examples/conf`, waits for a program to be chosen, since an example renders a
+real one. [inventory.md](inventory.md) names the link in its model, its
+address table and rules 37 to 41, and points here for the rest. This page goes
+when the [open questions](#open-questions) are settled and its prose is folded
+in.
 
 ## Why it exists
 
