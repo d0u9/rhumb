@@ -1,5 +1,6 @@
 // Package inventory reads a generator root's inventory: nodes/*.yaml,
-// users.yaml, routes.yaml and networks.yaml, parsed into one model. It only
+// users.yaml, routes.yaml, links.yaml and networks.yaml, parsed into one
+// model. It only
 // parses — no derivation and no validation. A file that will not parse is
 // listed with its error rather than dropped, as confgen already does for a
 // broken manifest.
@@ -20,11 +21,12 @@ import (
 // NodesDir is the generator root's subdirectory holding one file per node.
 const NodesDir = "nodes"
 
-// UsersFilename, RoutesFilename and NetworksFilename name the generator
+// UsersFilename, RoutesFilename, LinksFilename and NetworksFilename name the generator
 // root's other inventory files.
 const (
 	UsersFilename    = "users.yaml"
 	RoutesFilename   = "routes.yaml"
+	LinksFilename    = "links.yaml"
 	NetworksFilename = "networks.yaml"
 	HostsFilename    = "hosts.yaml"
 )
@@ -749,6 +751,15 @@ type Route struct {
 	Scope string `yaml:"-"`
 }
 
+// Link is one entry of links.yaml: a session one instance opens to another
+// instance's port on another node, which route traffic may travel inside.
+// From is an instance ID, with no port, since it listens on nothing for
+// this; To is a hop, <node>/<instance>:<port>. See docs/links.md.
+type Link struct {
+	From string `yaml:"from"`
+	To   string `yaml:"to"`
+}
+
 // RouteScope splits a route key into its scope and its name within the
 // scope. A top-level route has no scope.
 func RouteScope(key string) (scope, name string) {
@@ -777,6 +788,11 @@ type Root struct {
 	// Routes is routes.yaml's `routes` map, keyed by route name.
 	Routes       map[string]Route
 	RoutesBroken string
+
+	// Links is links.yaml's `links` map, keyed by link name. Nil when the
+	// file does not exist, which is an inventory with no links.
+	Links       map[string]Link
+	LinksBroken string
 
 	// Networks is networks.yaml's preference-ordered list.
 	Networks []string
@@ -833,6 +849,12 @@ func Load(root string) (*Root, error) {
 		return nil, err
 	}
 	rt.Routes, rt.RoutesBroken = routes, brokenRoutes
+
+	links, brokenLinks, err := loadLinks(root)
+	if err != nil {
+		return nil, err
+	}
+	rt.Links, rt.LinksBroken = links, brokenLinks
 
 	networks, universal, brokenNetworks, err := loadNetworks(root)
 	if err != nil {
@@ -1122,6 +1144,24 @@ func loadRoutes(root string) (map[string]Route, string, error) {
 		}
 	}
 	return routes, "", nil
+}
+
+func loadLinks(root string) (map[string]Link, string, error) {
+	path := filepath.Join(root, LinksFilename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("inventory: reading %s: %w", path, err)
+	}
+	var doc struct {
+		Links map[string]Link `yaml:"links"`
+	}
+	if err := decodeStrict(data, &doc); err != nil {
+		return nil, fmt.Sprintf("%s: %s", path, err), nil
+	}
+	return doc.Links, "", nil
 }
 
 func loadHosts(root string) (map[string]Host, string, error) {

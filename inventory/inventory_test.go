@@ -496,3 +496,71 @@ func TestLoadRoutes_ScopedRoutesAreKeyedByScope(t *testing.T) {
 		t.Errorf("home/samba = %+v, want scope home", r)
 	}
 }
+
+func TestLoad_Links(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, LinksFilename), `links:
+  home-nce:
+    from: home/agent-home
+    to: nce/relay-nce:agents
+`)
+
+	got, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.LinksBroken != "" {
+		t.Fatalf("LinksBroken = %q, want empty", got.LinksBroken)
+	}
+	want := Link{From: "home/agent-home", To: "nce/relay-nce:agents"}
+	if len(got.Links) != 1 || got.Links["home-nce"] != want {
+		t.Fatalf("Links = %+v, want home-nce: %+v", got.Links, want)
+	}
+}
+
+// A missing links.yaml is an inventory with no links, which is every
+// inventory written before links existed.
+func TestLoad_MissingLinksIsEmpty(t *testing.T) {
+	got, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Links != nil || got.LinksBroken != "" {
+		t.Fatalf("Links = %+v, LinksBroken = %q, want neither", got.Links, got.LinksBroken)
+	}
+}
+
+func TestLoad_BrokenLinksIsReported(t *testing.T) {
+	for name, content := range map[string]string{
+		"unknown key":   "links:\n  a:\n    from: n/x\n    to: m/y:p\n    via: r\n",
+		"not a mapping": "links: [a, b]\n",
+		"bad syntax":    "links: {unterminated\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, filepath.Join(root, LinksFilename), content)
+			got, err := Load(root)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got.LinksBroken == "" || got.Links != nil {
+				t.Fatalf("Links = %+v, LinksBroken = %q, want only an error", got.Links, got.LinksBroken)
+			}
+		})
+	}
+}
+
+// The reverse-exit fixture is what links.md proposes; its links.yaml is the
+// file this step reads.
+func TestLoad_ReverseExitFixtureLinks(t *testing.T) {
+	got, err := Load(filepath.Join("..", "docs", "fixtures", "reverse-exit", "conf"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.LinksBroken != "" {
+		t.Fatalf("LinksBroken = %q", got.LinksBroken)
+	}
+	if l := got.Links["home-nce"]; l.From != "home/agent-home" || l.To != "nce/relay-nce:agents" {
+		t.Fatalf("Links = %+v", got.Links)
+	}
+}
