@@ -38,7 +38,8 @@ The inventory states each of these once. The renderer derives the rest.
 | **network** | A named network that nodes belong to, such as `home` or `internet`. |
 | **service** | One program a node deploys, with its template, defaults and output name: `ssserver`, `sslocal`, `hysteria2`, `microbin`. |
 | **export** | One way of handing a credential to a person: a share URI, a JSON configuration, a QR code. Deployed nowhere. |
-| **instance** | One service running on one node, and one rendered configuration file. |
+| **instance** | One service running on one node: its own ports, grants and values. Ordinarily one process and one rendered file. |
+| **process** | One running program on a node, when it runs several instances: one rendered file, one container or unit. See [Processes](#processes). |
 | **port** | A named listening port of an instance. Every port an instance listens on is named; an instance that listens on nothing has none. |
 | **route** | An ordered list of hops, from where traffic enters to where it leaves. |
 | **link** | A session one instance opens to another instance's port on another node, which route traffic may travel inside, with or against the direction it was opened. See [links.md](links.md). |
@@ -76,10 +77,11 @@ data.
 
 | What | The names |
 | --- | --- |
-| Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
-| Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `download`, `containers`, `accounts`, `instances` |
+| Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `links.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
+| Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `download`, `containers`, `accounts`, `processes`, `instances` |
 | Container network keys | `name`, `subnet`, `gateway`, per entry of a node's `containers` |
 | Profile keys | `export`, `values`, `access`, `runs`, `bind`, `ports` |
+| Process keys | `service`, `values`, `deploy`, per entry of a node's `processes` |
 | Instance keys | `id`, `service`, `ports`, `process`, `runtime`, `bind`, `containers`, `self`, `values`, `deploy`, `dials` |
 | Port keys | `port`, `protocol`, `self`, `published` (a string or a list), when a port is written as a mapping rather than a bare number |
 | User keys | `username`, `devices`, `export`, `credentials`, `access` |
@@ -517,7 +519,8 @@ per member: address, `mac`, identifier.
 
 ## Instances and ports
 
-An instance is one service running on one node, and one rendered configuration
+An instance is one service running on one node. Unless it names a
+[process](#processes), it is also one program and one rendered configuration
 file. Its `id` is unique within its node, and does not repeat the node: the
 instance is written under its node already, so a site code in its name would
 say the same thing twice and change twice when the service moves.
@@ -668,12 +671,18 @@ out — see [a secret several people hold](#a-secret-several-people-hold):
       relays: {port: 52146, self: [psk.backup]}
 ```
 
-**Two instances are for two files.** A second server of the same service, with
-its own configuration and its own values, is a second instance; `process` says
-two of them are served by one running program, which is what a delivery step
-that assembles one file out of two needs to know:
+**Two instances for one program.** A second server of the same service, with
+its own configuration and its own values, is a second instance. When one
+program serves both, each still names it as its `process`, and the node
+declares the process with the service whose template writes the program's one
+file:
 
 ```yaml
+processes:
+  ss-multi:
+    service: ssserver
+
+instances:
   - id: ss-sea01
     service: ssserver
     process: ss-multi
@@ -687,10 +696,46 @@ that assembles one file out of two needs to know:
       users: 38260
 ```
 
-An instance naming no `process` is a process of its own, which is the ordinary
-case. Combining what two instances render into one program's configuration file
-is a question for delivery, not for this model — and with ports of one program
-in one instance, it is a question that arises far less often than it did.
+What [Processes](#processes) describes follows from that.
+
+### Processes
+
+**An instance is what the model reasons about; a process is what runs.** Routes,
+grants, links, account tables and validation are all per instance, and an
+instance naming no `process` is a process of its own, which is the ordinary
+case. A node's `processes` declares a program that runs several instances as
+one: one configuration file, one container or unit.
+
+```yaml
+processes:
+  xray-nce:
+    service: xray
+    values: {}
+    deploy: {}
+```
+
+`service` is the program: its template renders the process, and its deploy
+directory, when it has one, deploys it. `values` and `deploy` are the
+program's own, as an instance's are.
+
+**The members keep everything that is theirs.** Each member's service still
+decides what it is: whether it terminates, forwards or fans out, how it
+authenticates, which ends of a link it may be. A program offering two modes is
+two services, one per mode, and one process running an instance of each — a
+relay that is both a tunnel's near end and a reverse proxy's portal is the case
+this exists for. A member's service may then be a manifest alone, with no
+template: it renders nothing of its own.
+
+**The process is the target.** It is listed, selected and rendered in its
+members' place, and it belongs to every route its members do. Its template
+reads each member with `members`: name, service, instance, `upstream`,
+`downstreams`, `links`, `principals`, `published` and `dials`, each what that
+member would have been given on its own. Its ports are its members', published
+as theirs are; the name a port is published at stays the member's.
+
+What one program shares, its members share: what runs it, its bind and its
+container networks. Port names and numbers are distinct across them, since
+they listen in one place.
 
 `bind` is optional and defaults from the service's defaults file. A server binds
 every interface; a client's local listener binds loopback.
@@ -1701,8 +1746,7 @@ use needs; the override is the exception for one route.
 opens, as a credential's `access` narrows its owner's. Unwritten, every one.
 
 `runs` names the service whose program the profile is, such as `sslocal` or
-`singbox`. **An instance is one process**, and a profile that runs a program
-is one: a single derived instance, `<device>-<profile>`, of the named service,
+`singbox`. **A profile that runs a program is one instance**, and one process: a single derived instance, `<device>-<profile>`, of the named service,
 whose upstreams are every route its `access` opens. The service's own template
 renders it, as it renders an authored instance of that service, reading
 `bind` and `ports` from the profile, and `upstreams` — or `upstream`, for a
@@ -2606,6 +2650,11 @@ failing can be told which level it was reading.
 40. An instance ends at most one link whose other end runs on a given node.
 41. An edge riding a link resolves at the far end: the link's instance there
     reaches `To` by the same-node rules.
+42. An instance's `process` names one of its node's `processes`; every process
+    names a service that renders, has at least one member, and does not
+    share a name with an instance on its node.
+43. A process's members share a runtime, a bind and container networks, and
+    their port names and their numbers on each protocol are distinct.
 
 Rules 37 to 41 are explained in [links.md](links.md#validation).
 
