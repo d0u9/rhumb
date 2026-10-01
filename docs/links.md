@@ -480,15 +480,19 @@ programs' documentation. Each needs a decision before the step it affects.
   program's mode does. xray's forward tunnel accepts flows at `from`, its
   reverse proxy and frp's publication at `to`. Declaring the `link.from` and
   `link.to` roles alone would also accept an frpc dialling a VLESS port.
-  The same mode question decides both. Two answers:
-  - **A mode is a service.** A program with two link modes is two services, as
-    `sslocal` and `ssserver` are. Each end declares whether flows may start
-    there and which kind of peer it pairs with, compared as an opaque label.
-    Simple to check; one xray in Nanjing acting as a tunnel client and a
-    reverse portal becomes two instances.
-  - **A mode belongs to the `to` port.** The port declares its kind and the end
-    flows start at; a `from` service declares the kinds it can dial. One
-    instance can then hold both roles, at the cost of a per-port declaration.
+
+  *Decided: a mode is a service.* A program with two link modes is two
+  services, and one xray in Nanjing acting as a tunnel client and a reverse
+  portal is two instances run by [one process](inventory.md#processes). The
+  `one-process` fixture variant is that arrangement. *Still to add:* each end
+  declaring whether flows may start there and the kind of peer it pairs with,
+  compared as an opaque label, and the check that uses them. Until then the
+  `agent-originates` variant passes.
+
+  Rejected: a mode on the `to` port, which writes the mode in every node file
+  and splits one fact between the port and the manifest; and roles inside one
+  instance, which repeat what `process` already says in the other direction
+  and would move `values`, `principal`, `bind` and `self` below the instance.
 - **What a link can carry.** Two checks, not one. A riding edge's target port
   has a protocol, which the link's program must be able to carry: TCP-only
   carrying cannot reach a UDP port. The link's own `to` port has its protocol
@@ -545,6 +549,18 @@ programs' documentation. Each needs a decision before the step it affects.
   Rendering tests fix the data contract. Before claiming a program is
   supported, validate the generated files with that program and run a small
   end-to-end forwarding check.
+- **Splitting protocol from program.** A process's members have services that
+  are often a manifest alone, so the knowledge of a protocol — Shadowsocks'
+  secret shape, its `ss://` export — is written again for each program that
+  speaks it rather than shared with `ssserver`. Reusing an existing service as
+  a member, its template ignored, would avoid the copy but ignores a template
+  silently. The lasting answer is two kinds of service, a protocol's and a
+  program's, with each manifest key belonging to one. That is a refactor of
+  every service, and waits until a program serving several protocols — sing-box
+  with several inbounds — needs it.
+- **A process's deployment.** A containerised process deploys through its
+  program's deploy directory with its members' ports and mappings, but no test
+  pins that file yet.
 - **A link nothing rides.** It is still a running session, so it is not an
   error. Whether `rhumb check` should mention it is open.
 - **The name.** "Tunnel" was the other candidate, but it suggests only the

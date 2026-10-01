@@ -72,3 +72,4 @@ it reports.
 | `second-agent` | A second agent linked to the same relay port | Rule 40 error naming `relay-nce`, `home` and both links |
 | `agent-originates` | The agent listens, and a route starts at it toward the relay | Error; pending the open question on which end may start a flow |
 | `no-links` | `links.yaml` removed | Rule 10 error, as today |
+| `one-process` | nce runs the reverse relay and a forward tunnel to `sea` as two instances of one process | One rendered file; pinned by `engine/process_test.go` |
