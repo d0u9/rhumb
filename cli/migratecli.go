@@ -259,6 +259,11 @@ func edgeAddress(edge derive.Edge, exists bool) string {
 	if !exists {
 		return "(absent)"
 	}
+	if edge.Link != "" {
+		// Adding a link changes an edge without changing its route, so
+		// which link and who now dials is part of what changed.
+		return fmt.Sprintf("%s:%d [%s] via %s, dialled by %s", edge.Address, edge.Port, edge.Network, edge.Link, edge.Dialer)
+	}
 	return fmt.Sprintf("%s:%d [%s]", edge.Address, edge.Port, edge.Network)
 }
 

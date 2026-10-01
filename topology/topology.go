@@ -50,6 +50,20 @@ type Edge struct {
 	// container network both ends share; both are empty for loopback.
 	Network   string
 	Container string
+	// Link names the link this edge rides, and Dialer the link's far end,
+	// which dials To. A picture draws the edge along the link, so a home
+	// server behind NAT is not shown being dialled from outside.
+	Link   string
+	Dialer string
+}
+
+// Link is one link between two shapes on two nodes: From opens it, To's
+// port accepts it.
+type Link struct {
+	Name   string
+	From   string
+	To     string
+	ToPort string
 }
 
 // Graph is the whole connectivity picture one inventory and its derivation
@@ -58,6 +72,7 @@ type Graph struct {
 	Containers []Container
 	Shapes     []Shape
 	Edges      []Edge
+	Links      []Link
 }
 
 // Build computes Graph from inv and model. Broken nodes contribute no
@@ -106,15 +121,20 @@ func Build(inv *inventory.Root, model *derive.Model) *Graph {
 			from = e.From.Instance
 		}
 		g.Edges = append(g.Edges, Edge{
-			Route:   e.Route,
-			From:    from,
-			To:      e.To.Instance,
-			ToPort:  e.To.Port,
+			Route:     e.Route,
+			From:      from,
+			To:        e.To.Instance,
+			ToPort:    e.To.Port,
 			Address:   e.Address,
 			Port:      e.Port,
 			Network:   e.Network,
 			Container: e.Container,
+			Link:      e.Link,
+			Dialer:    e.Dialer,
 		})
+	}
+	for _, l := range model.Links {
+		g.Links = append(g.Links, Link{Name: l.Name, From: l.From, To: l.To.Instance, ToPort: l.To.Port})
 	}
 
 	sort.Slice(g.Containers, func(i, j int) bool { return g.Containers[i].ID < g.Containers[j].ID })

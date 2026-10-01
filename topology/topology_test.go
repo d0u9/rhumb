@@ -142,3 +142,18 @@ func TestBuild_BrokenNodeContributesNoShapes(t *testing.T) {
 		}
 	}
 }
+
+func TestBuild_EdgeRidingALink(t *testing.T) {
+	model := &derive.Model{
+		Edges: []derive.Edge{{Route: "home-exit", From: derive.Hop{Instance: "nce/relay", Port: "home"},
+			To: derive.Hop{Instance: "home/ss", Port: "users"}, Link: "home-nce", Dialer: "home/agent"}},
+		Links: []derive.Link{{Name: "home-nce", From: "home/agent", To: derive.Hop{Instance: "nce/relay", Port: "agents"}}},
+	}
+	g := Build(&inventory.Root{}, model)
+	if len(g.Links) != 1 || g.Links[0] != (Link{Name: "home-nce", From: "home/agent", To: "nce/relay", ToPort: "agents"}) {
+		t.Fatalf("Links = %+v", g.Links)
+	}
+	if e := g.Edges[0]; e.Link != "home-nce" || e.Dialer != "home/agent" {
+		t.Fatalf("Edge = %+v", e)
+	}
+}
