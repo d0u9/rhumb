@@ -73,6 +73,16 @@ func (m *Model) Mappings(inv *inventory.Root, instance string) map[string]Mappin
 	if !found || len(inst.Ports) == 0 {
 		return nil
 	}
+	// A process publishes what its members do: each port is one member's.
+	if len(inst.Members) > 0 {
+		out := map[string]Mapping{}
+		for _, member := range inst.Members {
+			for port, mp := range m.Mappings(inv, member) {
+				out[port] = mp
+			}
+		}
+		return out
+	}
 
 	// Which node each edge leaves from: the hop's own instance for an edge
 	// between two hops, and the device for one out of a file written for a

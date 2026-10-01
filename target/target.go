@@ -82,12 +82,20 @@ func List(inv *inventory.Root, model *derive.Model) []Target {
 			if inst.Service == "" {
 				continue // an override, not a target of its own — the derived instance it pins is.
 			}
+			if _, ok := n.Processes[inst.Process]; ok && inst.Process != "" {
+				continue // a process's member: the process renders and deploys it.
+			}
+			routes := routesContaining(inv, model, inst.ID)
+			for _, member := range inst.Members {
+				routes = append(routes, routesContaining(inv, model, member)...)
+			}
+			routes = dedupeSorted(routes)
 			out = append(out, Target{
 				Node:     n.ID,
 				User:     n.Owner,
 				Service:  inst.Service,
 				Instance: inst.ID,
-				Routes:   routesContaining(inv, model, inst.ID),
+				Routes:   routes,
 			})
 		}
 	}
@@ -364,4 +372,18 @@ func matchesOne(t Target, term Term) bool {
 func globMatch(pattern, value string) bool {
 	ok, _ := filepath.Match(pattern, value)
 	return ok
+}
+
+func dedupeSorted(list []string) []string {
+	sort.Strings(list)
+	out := list[:0]
+	for i, s := range list {
+		if i == 0 || s != list[i-1] {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

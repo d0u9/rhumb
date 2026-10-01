@@ -641,6 +641,9 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		}
 	}
 
+	for _, issue := range processIssues(inv, manifests) {
+		add("%s", issue)
+	}
 	for _, issue := range linkIssues(inv, manifests, realInstances) {
 		add("%s", issue)
 	}
@@ -1339,6 +1342,9 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			if isOverride(inst) {
 				continue // a client's own local listeners, not reachable from outside.
 			}
+			if len(inst.Members) > 0 {
+				continue // a process's ports are its members', checked as theirs.
+			}
 			// A container on a container network binds inside its own
 			// network namespace, where nothing else listens: what it holds
 			// on the node is the host mapping derived for it.
@@ -1405,6 +1411,84 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 	}
 
 	return issues
+}
+
+// processIssues is rules 42 and 43: what an instance's `process` names, and
+// what one program running several instances requires of them. See
+// docs/inventory.md#processes.
+func processIssues(inv *inventory.Root, manifests map[string]confgen.Manifest) []string {
+	var out []string
+	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
+	for _, n := range inv.Nodes {
+		if n.Broken != "" {
+			continue
+		}
+		names := map[string]bool{}
+		for _, inst := range n.Instances {
+			if len(inst.Members) == 0 {
+				names[inst.Name] = true
+			}
+		}
+		for _, inst := range n.Instances {
+			// Rule 42: a process is declared, and declared once.
+			if len(inst.Members) == 0 {
+				if inst.Process != "" {
+					if _, ok := n.Processes[inst.Process]; !ok {
+						add("instance %q: process %q is not one of node %q's processes", inst.ID, inst.Process, n.ID)
+					}
+				}
+				continue
+			}
+			if names[inst.Name] {
+				add("node %q: process %q has an instance's name", n.ID, inst.Name)
+			}
+			if inst.Service == "" {
+				add("process %q names no service", inst.ID)
+			} else if m, ok := manifests[inst.Service]; ok && len(m.Renders()) == 0 {
+				add("process %q: service %q renders nothing", inst.ID, inst.Service)
+			}
+		}
+		// Rule 43: the members share what runs them, and listen apart.
+		for name := range n.Processes {
+			var members []inventory.Instance
+			for _, inst := range n.Instances {
+				if inst.Process == name && len(inst.Members) == 0 {
+					members = append(members, inst)
+				}
+			}
+			id := n.ID + inventory.QualifiedSep + name
+			if len(members) == 0 {
+				add("process %q: no instance names it", id)
+				continue
+			}
+			first := members[0]
+			ports := map[string]string{}
+			type bound struct {
+				number   int
+				protocol string
+			}
+			numbers := map[bound]string{}
+			for _, mb := range members {
+				if mb.RuntimeOr() != first.RuntimeOr() || mb.Bind != first.Bind ||
+					strings.Join(mb.ContainerNames(), ",") != strings.Join(first.ContainerNames(), ",") {
+					add("process %q: %s and %s differ in runtime, bind or container networks, which one program shares", id, first.ID, mb.ID)
+				}
+				for port, p := range mb.Ports {
+					if other, ok := ports[port]; ok {
+						add("process %q: port %q is both %s's and %s's", id, port, other, mb.ID)
+					}
+					ports[port] = mb.ID
+					b := bound{p.Number, p.ProtocolOr()}
+					if other, ok := numbers[b]; ok && other != mb.ID+":"+port {
+						add("process %q: %s and %s:%s both listen on %d/%s", id, other, mb.ID, port, p.Number, p.ProtocolOr())
+					}
+					numbers[b] = mb.ID + ":" + port
+				}
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // linkIssues is rules 37, 39 and 40 for links.yaml; derive enforces 38 and

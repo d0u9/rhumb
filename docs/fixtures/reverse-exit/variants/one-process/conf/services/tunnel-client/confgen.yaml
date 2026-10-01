@@ -1,0 +1,8 @@
+# The near end of a forward tunnel: forwards route traffic into its link.
+auth: none
+forwards: true
+downstreams: many
+dispatch: port
+link:
+  from:
+    values: {}

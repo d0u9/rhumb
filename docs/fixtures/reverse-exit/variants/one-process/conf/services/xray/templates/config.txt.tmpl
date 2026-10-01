@@ -1,0 +1,2 @@
+{{ range members }}{{ .Name }} {{ .Service }}{{ range .Links }} {{ .Name }}:{{ .End }}{{ end }}{{ range .Downstreams }} {{ .Entry }}>{{ .Address }}:{{ .Number }}{{ end }}
+{{ end }}

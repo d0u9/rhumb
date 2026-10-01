@@ -1,0 +1,14 @@
+# Added: the far end of the forward tunnel, and an exit beside it.
+id: sea
+networks:
+  internet: sea.example.net
+instances:
+  - id: tunnel-sea
+    service: tunnel-server
+    ports:
+      tunnel: 443
+  - id: ss-sea
+    service: ssserver
+    bind: 127.0.0.1
+    ports:
+      users: 8388

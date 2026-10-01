@@ -1,7 +1,7 @@
 # Changed: both instances in containers on one network.
 id: home
 networks:
-  home: 10.0.0.20
+  lan: 10.0.0.20
 containers:
   - {name: apps, subnet: 172.29.0.0/24}
 instances:
