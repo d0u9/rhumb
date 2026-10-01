@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1174,4 +1175,71 @@ func TestValidate_ContainersOnOnePortPublishedApart(t *testing.T) {
 	if !containsSubstring(got, "ss-srv2:alt, ss-srv:alt bind the same address, port and protocol (203.0.113.10:49217/tcp)") {
 		t.Fatalf("Validate = %v, want the two published on one host address to collide", messages(got))
 	}
+}
+
+func reverseExit(t *testing.T, variant string) (*inventory.Root, map[string]confgen.Manifest) {
+	t.Helper()
+	root := filepath.Join("..", "docs", "fixtures", "reverse-exit", "conf")
+	if variant != "" {
+		root = filepath.Join("..", "docs", "fixtures", "reverse-exit", "variants", variant, "conf")
+	}
+	inv, err := inventory.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg, err := confgen.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifests := map[string]confgen.Manifest{}
+	for _, s := range cg.Services {
+		manifests[s.Name] = s.Manifest
+	}
+	return inv, manifests
+}
+
+func TestValidate_LinkRules(t *testing.T) {
+	for name, tc := range map[string]struct {
+		variant string
+		edit    func(*inventory.Root, map[string]confgen.Manifest)
+		want    string
+	}{
+		"clean": {want: ""},
+		"undeclared": {edit: func(_ *inventory.Root, m map[string]confgen.Manifest) {
+			delete(m, "reverse-agent")
+			m["reverse-agent"] = confgen.Manifest{}
+		}, want: "does not declare link.from"},
+		"route on link": {edit: func(inv *inventory.Root, _ map[string]confgen.Manifest) {
+			inv.Routes["x"] = inventory.Route{Hops: []string{"nce/relay-nce:agents"}}
+		}, want: "a link's to port"},
+		"same node": {edit: func(inv *inventory.Root, _ map[string]confgen.Manifest) {
+			inv.Links["home-nce"] = inventory.Link{From: "nce/relay-nce", To: "nce/relay-nce:agents"}
+		}, want: "both ends run on nce"},
+		"second agent": {variant: "second-agent", want: "home-nce, home-nce-2"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			inv, manifests := reverseExit(t, tc.variant)
+			if tc.edit != nil {
+				tc.edit(inv, manifests)
+			}
+			var got []string
+			for _, issue := range linkIssues(inv, manifests, realOf(inv)) {
+				got = append(got, issue)
+			}
+			joined := strings.Join(got, "\n")
+			if tc.want == "" && joined != "" || !strings.Contains(joined, tc.want) {
+				t.Fatalf("issues = %q, want %q", joined, tc.want)
+			}
+		})
+	}
+}
+
+func realOf(inv *inventory.Root) map[string]instRef {
+	out := map[string]instRef{}
+	for _, n := range inv.Nodes {
+		for _, inst := range n.Instances {
+			out[inst.ID] = instRef{nodeID: n.ID, inst: inst}
+		}
+	}
+	return out
 }
