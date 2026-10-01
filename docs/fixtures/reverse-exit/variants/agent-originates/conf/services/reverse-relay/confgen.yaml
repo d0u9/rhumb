@@ -1,0 +1,12 @@
+# The relay end of a reverse link, whatever program fills it. Forwards route
+# traffic, reading none of it; authenticates each agent on its link port.
+auth: none
+forwards: true
+downstreams: many
+dispatch: port
+link:
+  to:
+    auth: per-principal
+secret:
+  kind: base64
+  bytes: 32

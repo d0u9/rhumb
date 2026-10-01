@@ -1,0 +1,1 @@
+rule 10: route home-exit: edge relay-nce -> ss-home resolves no address: home has no address on a network nce reaches

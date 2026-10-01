@@ -1,0 +1,5 @@
+# Host publication. Union of every caller's need.
+nce:
+  - {instance: relay-nce, port: agents, number: 40000, on: internet}  # dialled by agent-home
+  - {instance: relay-nce, port: home, number: 40001, on: internet}    # dialled by alice
+home: []   # ss-home's only caller is agent-home on loopback; agent-home listens on nothing

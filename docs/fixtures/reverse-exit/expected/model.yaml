@@ -1,0 +1,21 @@
+# Derived model, the parts links add. Field names follow docs/links.md.
+links:
+  home-nce:
+    from: home/agent-home
+    to: nce/relay-nce:agents
+    address: nce.example.net   # rule 38: home reaches internet, nce has an address on it
+    network: internet
+
+edges:
+  - route: home-exit
+    from: nce/relay-nce:home        # logical From: grants and route reasoning
+    to: home/ss-home:users
+    link: home-nce                  # selected: relay-nce ends it, its other end is on home
+    dialler: home/agent-home        # the far end, which actually dials To
+    address: 127.0.0.1              # host-network far end, host-network To: loopback
+
+grants:
+  - principal: alice/default        # the route's, on the terminating hop as today
+    on: home/ss-home:users
+  - principal: home/agent-home      # the link's: the from instance, as itself
+    on: nce/relay-nce:agents

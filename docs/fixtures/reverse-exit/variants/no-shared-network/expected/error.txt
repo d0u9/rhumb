@@ -1,0 +1,1 @@
+rule 41: route home-exit: edge relay-nce -> ss-home rides link home-nce, but its far end home/agent-home is on container network apps and home/ss-home shares none of them; loopback inside the container is the container itself

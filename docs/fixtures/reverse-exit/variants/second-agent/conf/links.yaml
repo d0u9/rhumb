@@ -1,0 +1,8 @@
+links:
+  home-nce:
+    from: home/agent-home
+    to: nce/relay-nce:agents
+  # Added.
+  home-nce-2:
+    from: home/agent2-home
+    to: nce/relay-nce:agents

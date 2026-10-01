@@ -1,0 +1,5 @@
+# Unchanged from today: an exit with one account. It never learns a link exists.
+principals:
+  users:
+    - account: alice
+      secret: <home/ss-home/users/alice/default>

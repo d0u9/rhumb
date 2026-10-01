@@ -1,0 +1,2 @@
+# alice's phone: dials the relay, authenticates against the exit.
+home-exit  ss://<alice's ss-home secret>@nce.example.net:40001#home-exit

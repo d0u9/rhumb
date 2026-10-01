@@ -1,0 +1,5 @@
+# The home server opens the session; the relay sends traffic back down it.
+links:
+  home-nce:
+    from: home/agent-home
+    to: nce/relay-nce:agents

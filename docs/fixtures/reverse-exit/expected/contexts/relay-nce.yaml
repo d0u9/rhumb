@@ -1,0 +1,27 @@
+# Render context additions for nce/relay-nce.
+links:
+  home-nce:
+    end: to
+    peer:
+      instance: home/agent-home
+      account: home-agent-home
+    carries:
+      - key: relay-nce.home--ss-home.users
+        entrance: {instance: relay-nce, port: home, number: 40001, protocol: tcp}
+        target: {instance: ss-home, port: users, number: 8388, protocol: tcp, address: 127.0.0.1}
+        routes: [home-exit]
+
+downstreams:
+  - route: home-exit
+    link: home-nce
+    instance: ss-home
+    port: users
+    number: 8388
+    address: 127.0.0.1             # as the far end dials it, not as nce would
+
+# Account table for the link port, from link.to.auth, although the service's
+# own auth is none (implementation step 5).
+principals:
+  agents:
+    - account: home-agent-home
+      secret: <nce/relay-nce/agents/home-agent-home/default>

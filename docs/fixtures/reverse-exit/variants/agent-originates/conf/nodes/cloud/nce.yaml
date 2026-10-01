@@ -1,0 +1,19 @@
+# The relay: reachable from the internet, terminates nothing.
+id: nce
+networks:
+  internet: nce.example.net
+instances:
+  - id: relay-nce
+    service: reverse-relay
+    ports:
+      # The link port. Only agents dial it; no route names it (rule 39).
+      agents: 40000
+      # A route port. Clients dial it; its bytes go down the link.
+      home:
+        port: 40001
+        published: nce.example.net
+  # Added: an exit on the relay machine.
+  - id: ss-nce
+    service: ssserver
+    ports:
+      users: 8388
