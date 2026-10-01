@@ -41,6 +41,7 @@ The inventory states each of these once. The renderer derives the rest.
 | **instance** | One service running on one node, and one rendered configuration file. |
 | **port** | A named listening port of an instance. Every port an instance listens on is named; an instance that listens on nothing has none. |
 | **route** | An ordered list of hops, from where traffic enters to where it leaves. |
+| **link** | A session one instance opens to another instance's port on another node, which route traffic may travel inside, with or against the direction it was opened. See [links.md](links.md). |
 | **hop** | One step of a route, written `<node>/<instance>:<port>`. |
 | **user** | A logical identity: a person, not a Linux account and not a password. |
 | **credential** | One of a person's identities. A device names which one it uses; two naming the same one share a secret. |
@@ -129,6 +130,7 @@ so.
 ├── nodes/<group>/*.instances/*.yaml  optional instance files
 ├── users.yaml                people and what they may reach
 ├── routes.yaml               chains
+├── links.yaml                sessions between two instances that routes ride
 ├── networks.yaml             networks, their preference order and address ranges
 └── hosts.yaml                machines on a network that run no instance
 
@@ -412,6 +414,7 @@ the [container networks](#container-networks) on that node.
 | The same node, the upstream on no container network | `127.0.0.1` and the downstream port |
 | The same node, the upstream on container networks the downstream shares none of | An error: loopback inside the container is the container itself |
 | The downstream has an address on a network the upstream reaches | That address, on the first such network in preference order |
+| The upstream ends a link whose other end is on the downstream's node | The downstream's address as the link's far end dials it, by the same-node rows |
 | Neither | An error naming both nodes and what each one reaches |
 
 The rule is one-directional on purpose. A client reaching a server needs the
@@ -2593,6 +2596,18 @@ failing can be told which level it was reading.
     not write it, to exactly one instance in the innermost shared scope.
 36. A node's id is its file's name without `.yaml`, and every account in a
     node's `accounts` has a uid.
+37. A link's `from` names an existing authored instance, and its `to` an
+    existing authored instance and port. The two run on different nodes, and
+    their services declare `link.from` and `link.to` respectively.
+38. A link resolves an address as rule 10 requires of an edge, with `from`
+    dialling `to`.
+39. No route's hop names a port that a link's `to` names. Several links may
+    share one `to` port.
+40. An instance ends at most one link whose other end runs on a given node.
+41. An edge riding a link resolves at the far end: the link's instance there
+    reaches `To` by the same-node rules.
+
+Rules 37 to 41 are explained in [links.md](links.md#validation).
 
 ## Boundaries
 
