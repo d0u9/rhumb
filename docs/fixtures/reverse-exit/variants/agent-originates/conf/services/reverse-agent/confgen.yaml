@@ -1,0 +1,6 @@
+# Changed: it has a route port now, and forwards what enters it.
+auth: none
+forwards: true
+link:
+  from:
+    values: {}

@@ -1,0 +1,5 @@
+# The home end of a reverse link. No route ports, no route role.
+auth: none
+link:
+  from:
+    values: {}

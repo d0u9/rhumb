@@ -1,0 +1,14 @@
+# Differences from ../../expected; everything else is identical.
+model:
+  edges:
+    - route: home-exit
+      dialler: home/agent-home
+      address: ss-home          # container name on apps, not loopback
+      container: apps
+contexts:
+  relay-nce:   # downstreams[0].address and carries[0].target.address
+    address: ss-home
+  agent-home:  # carries[0].target.address
+    address: ss-home
+mappings:
+  home: []     # the edge stays inside apps and never reaches the host

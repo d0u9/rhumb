@@ -1,0 +1,6 @@
+routes:
+  home-exit:
+    hops: [nce/relay-nce:home, home/ss-home:users]
+  # Added: starts at the link's from end.
+  home-out-nce:
+    hops: [home/agent-home:socks, nce/ss-nce:users]

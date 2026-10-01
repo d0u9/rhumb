@@ -1,0 +1,17 @@
+# Behind NAT: an address on the house network only. It reaches the internet
+# through `universal`, which is all a link's `from` needs (rule 38).
+id: home
+networks:
+  home: 10.0.0.20
+instances:
+  # Listens on nothing. Opens the session to the relay and dials ss-home for
+  # every flow the relay sends down it.
+  - id: agent-home
+    service: reverse-agent
+  # The exit. Host network, loopback only: the agent beside it is its only
+  # caller, so nothing is published on the home server.
+  - id: ss-home
+    service: ssserver
+    bind: 127.0.0.1
+    ports:
+      users: 8388

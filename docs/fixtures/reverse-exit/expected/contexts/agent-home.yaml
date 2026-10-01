@@ -1,0 +1,17 @@
+# Render context additions for home/agent-home. It is no route's hop, so it has
+# no upstream or downstreams; everything it needs is under links.
+links:
+  home-nce:
+    end: from
+    peer:
+      instance: nce/relay-nce
+      port: agents
+      number: 40000
+      address: nce.example.net
+      account: home-agent-home
+      secret: <nce/relay-nce/agents/home-agent-home/default>
+    carries:                        # the same list the relay sees
+      - key: relay-nce.home--ss-home.users
+        entrance: {instance: relay-nce, port: home, number: 40001, protocol: tcp}
+        target: {instance: ss-home, port: users, number: 8388, protocol: tcp, address: 127.0.0.1}
+        routes: [home-exit]

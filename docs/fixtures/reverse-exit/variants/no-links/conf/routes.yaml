@@ -1,0 +1,5 @@
+# Enters at the relay, leaves from the home server. Nothing here says the
+# second edge rides a link: relay-nce ends home-nce, whose other end is on home.
+routes:
+  home-exit:
+    hops: [nce/relay-nce:home, home/ss-home:users]

@@ -1,0 +1,1 @@
+rule 40: nce/relay-nce ends two links whose other end runs on home: home-nce, home-nce-2; an edge from it to home would ride one chosen by nothing

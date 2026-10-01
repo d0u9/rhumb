@@ -1,0 +1,3 @@
+# Pending: links.md open question "Which end may start a carried flow".
+# A reverse pair starts flows only at its to end. Proposed message:
+route home-out-nce: edge agent-home -> ss-nce would ride link home-nce from its from end, but flows on home-nce start only at its to end, nce/relay-nce:agents

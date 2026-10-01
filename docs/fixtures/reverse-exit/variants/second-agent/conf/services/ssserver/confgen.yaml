@@ -1,0 +1,5 @@
+secret:
+  kind: base64
+  bytes: 32
+auth: per-principal
+rotation: disruptive

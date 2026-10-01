@@ -1,0 +1,7 @@
+networks:
+  - name: home
+    subnet: 10.0.0.0/8
+    gateway: 10.0.0.1
+  - name: internet
+
+universal: internet

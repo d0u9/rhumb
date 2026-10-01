@@ -1,0 +1,15 @@
+# Changed: the agent in a container, the exit a host process on loopback.
+id: home
+networks:
+  home: 10.0.0.20
+containers:
+  - {name: apps, subnet: 172.29.0.0/24}
+instances:
+  - id: agent-home
+    service: reverse-agent
+    runtime: docker
+  - id: ss-home
+    service: ssserver
+    bind: 127.0.0.1
+    ports:
+      users: 8388
