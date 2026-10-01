@@ -138,6 +138,13 @@ type Edge struct {
 	Container string
 	// Port is the numeric port the To hop's instance names for To.Port.
 	Port int
+	// Link names the link this edge rides, when From ends a link whose other
+	// end runs on To's node. Dialer is then that other end, the instance that
+	// actually dials To, and Address, Network and Container are what it
+	// uses. Both are empty for an edge dialled by From itself. See
+	// docs/links.md#an-edge-that-rides-a-link.
+	Link   string
+	Dialer string
 	// Terminal is the hop whose credential the From side authenticates
 	// against, which is To for every ordinary edge. They differ when To
 	// forwards: a relay terminates nothing, so what a client dials and what
@@ -147,10 +154,56 @@ type Edge struct {
 	Terminal Hop
 }
 
+// DialerOr is the instance that dials To: Dialer for an edge riding a link,
+// otherwise From's instance, or FromInstance for an export's edge.
+func (e Edge) DialerOr() string {
+	if e.Dialer != "" {
+		return e.Dialer
+	}
+	if e.From.Instance != "" {
+		return e.From.Instance
+	}
+	return e.FromInstance
+}
+
+// Link is one entry of links.yaml, resolved: From dials To at Address on
+// Network, as an edge would. See docs/links.md.
+type Link struct {
+	Name    string
+	From    string
+	To      Hop
+	Address string
+	Network string
+	Port    int
+}
+
+// LinkMapping is one entrance and target that route traffic crosses a link
+// between: the route-side end's port it entered on, and the target the far
+// end dials. Two routes sharing a stretch share one mapping, so a program
+// asked to open a listener per mapping opens each once.
+type LinkMapping struct {
+	Link string
+	// Key is stable for an entrance and target, for names a template
+	// generates, such as an frp proxy's, so that adding a route renames
+	// nothing.
+	Key       string
+	Entrance  Hop
+	Target    Hop
+	Address   string
+	Container string
+	Port      int
+	// Routes is every route using this mapping, sorted.
+	Routes []string
+}
+
 // Model is everything Derive computes.
 type Model struct {
 	ExportInstances []ExportInstance
 	Edges           []Edge
+	// Links is links.yaml resolved, in name order.
+	Links []Link
+	// LinkMappings is every mapping riding a link, in link then key order.
+	LinkMappings []LinkMapping
 	// Grants holds one entry per (principal, instance, port). Two routes
 	// entering one port do not make two credentials; see dedupeGrants.
 	Grants []Grant
@@ -292,6 +345,11 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 	}
 
 	m := &Model{}
+
+	links, err := deriveLinks(inv, instances, m)
+	if err != nil {
+		return nil, err
+	}
 
 	userKeys := make([]string, 0, len(inv.Users))
 	for key := range inv.Users {
@@ -555,16 +613,34 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 			if !ok {
 				return nil, fmt.Errorf("derive: route %q: %s has no port %q", routeName, hops[i+1].Instance, hops[i+1].Port)
 			}
-			address, network, container, err := resolveEndpoint(from.inst, from.node, to.inst, to.node, inv.Networks, inv.Universal)
+			link, far, err := links.riding(hops[i].Instance, to.node.ID, instances)
 			if err != nil {
 				return nil, fmt.Errorf("derive: route %q: %w", routeName, err)
 			}
+			dialer := from
+			if link != "" {
+				dialer = far
+			}
+			var address, network, container string
+			if dialer.inst.ID == to.inst.ID {
+				address = "127.0.0.1"
+			} else {
+				address, network, container, err = resolveEndpoint(dialer.inst, dialer.node, to.inst, to.node, inv.Networks, inv.Universal)
+				if err != nil {
+					return nil, fmt.Errorf("derive: route %q: %w", routeName, err)
+				}
+			}
 
 			terminal := terminalHopFrom(hops, i+1, instances, manifests)
-			m.Edges = append(m.Edges, Edge{
+			edge := Edge{
 				Route: routeName, From: hops[i], To: hops[i+1], Terminal: terminal,
 				Address: address, Network: network, Container: container, Port: port.Number,
-			})
+			}
+			if link != "" {
+				edge.Link, edge.Dialer = link, far.inst.ID
+				m.addLinkMapping(edge)
+			}
+			m.Edges = append(m.Edges, edge)
 			// A forwarder holds no credential: it never reads what passes
 			// through it, so there is nothing for it to authenticate with.
 			// The grant belongs to whatever dials into it, against the hop
@@ -581,6 +657,13 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 	}
 
 	m.Grants = dedupeGrants(m.Grants)
+	sort.SliceStable(m.LinkMappings, func(i, j int) bool {
+		a, b := m.LinkMappings[i], m.LinkMappings[j]
+		if a.Link != b.Link {
+			return a.Link < b.Link
+		}
+		return a.Key < b.Key
+	})
 	return m, nil
 }
 
