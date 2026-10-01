@@ -397,3 +397,25 @@ func TestRender_DocumentDefaults_InstanceKeysStayOutOfTheDocument(t *testing.T) 
 		t.Fatalf("out = %q, want %q", out, want)
 	}
 }
+
+func TestRender_Links(t *testing.T) {
+	in := Input{
+		Target:       Target{Service: "agent", Instance: "agent"},
+		DefaultsKind: confgen.DefaultsDocument,
+		Template:     `{{ with link "home-nce" }}{{ .End }} {{ .Peer.Address }}:{{ .Peer.Number }}{{ range .Carries }} {{ .Entrance.Number }}>{{ .Target.Address }}:{{ .Target.Number }}{{ end }}{{ end }}`,
+		Links: []Link{{Name: "home-nce", End: "from",
+			Peer:    LinkPeer{Instance: "relay", Port: "agents", Number: 40000, Address: "nce.example.net"},
+			Carries: []LinkMapping{{Key: "k", Entrance: LinkEndpoint{Number: 40001}, Target: LinkEndpoint{Address: "127.0.0.1", Number: 8388}}}}},
+	}
+	out, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "from nce.example.net:40000 40001>127.0.0.1:8388"; string(out) != want {
+		t.Fatalf("Render = %q, want %q", out, want)
+	}
+	in.Template = `{{ link "other" }}`
+	if _, err := Render(in); err == nil {
+		t.Fatal("want an error for a link the instance does not end")
+	}
+}

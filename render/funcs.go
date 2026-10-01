@@ -61,6 +61,15 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 			return grantees(in.Principals[port])
 		},
 		"downstreams": func() []Downstream { return in.Downstreams },
+		"links":       func() []Link { return in.Links },
+		"link": func(name string) (Link, error) {
+			for _, l := range in.Links {
+				if l.Name == name {
+					return l, nil
+				}
+			}
+			return Link{}, fmt.Errorf("link %q: the instance ends no such link", name)
+		},
 		"published":   func(port string) string { return in.Published[port] },
 		"publishedNames": func(port string) []string {
 			return in.PublishedNames[port]

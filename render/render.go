@@ -87,6 +87,10 @@ type Downstream struct {
 	// and sending to Address.
 	Entry       string
 	EntryNumber int
+	// Link names the link this hop's edge rides, when it rides one; Address
+	// is then the target's as the link's far end dials it. See
+	// docs/links.md#the-render-context.
+	Link string
 	// Address is the far end, chosen the way every other edge is: loopback
 	// when the two ends share a node, otherwise the downstream's address on
 	// the first network in preference order that the proxy reaches.
@@ -187,6 +191,9 @@ type Input struct {
 	// Names is every network's name table, by network, read with
 	// names "<network>".
 	Names map[string][]Name
+	// Links is every link this instance ends, by name, read with links or
+	// link "<name>". Empty for an instance ending none.
+	Links []Link
 	// Principals is every port with auth: per-principal, each to the
 	// accounts and secrets of everything holding a grant on it.
 	Principals map[string][]Principal
@@ -296,4 +303,55 @@ func DeployValues(defaults []byte, overlay map[string]any) (map[string]any, erro
 		return nil, err
 	}
 	return mergeInto(overlay, d), nil
+}
+
+// Link is one link an instance ends, from that end's side. See
+// docs/links.md#the-render-context.
+type Link struct {
+	Name string
+	// End is "from" or "to": which end this instance is.
+	End string
+	// Peer is the other end.
+	Peer LinkPeer
+	// Carries is every mapping riding the link, the same list at both ends,
+	// in key order.
+	Carries []LinkMapping
+}
+
+// LinkPeer is a link's other end. For the from end it is the port dialled:
+// Port, Number, Address and Published, the account this instance connects
+// as and its secret, and Shared and Values as link.from declares. For the to
+// end it is the instance and the account it connects as.
+type LinkPeer struct {
+	Instance  string
+	Port      string
+	Number    int
+	Address   string
+	Published string
+	Account   string
+	Secret    string
+	Shared    []string
+	Values    map[string]any
+}
+
+// LinkMapping is one entrance and target that route traffic crosses a link
+// between. Key is stable, for a name a template generates.
+type LinkMapping struct {
+	Key      string
+	Entrance LinkEndpoint
+	Target   LinkEndpoint
+	// Routes is every route using this mapping, flattened as Route is.
+	Routes []string
+}
+
+// LinkEndpoint is one end of a LinkMapping. Address is set on the target
+// only: the address the link's far end dials it at. Published is the
+// entrance's name, for an entrance dispatching by name.
+type LinkEndpoint struct {
+	Instance  string
+	Port      string
+	Number    int
+	Protocol  string
+	Address   string
+	Published string
 }

@@ -116,6 +116,11 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 		}
 	}
 
+	links, err := m.linksFor(instance)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", instance, err)
+	}
+
 	dials, err := m.dialsFor(instance)
 	if err != nil {
 		return nil, err
@@ -141,6 +146,7 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 			Published:      m.publishedFor(instance),
 			PublishedNames: m.publishedNamesFor(instance),
 			Dials:          dials,
+			Links:          links,
 			Names:          m.names(t.Node),
 			Principals:     principals,
 			Self:           own,
@@ -717,6 +723,7 @@ func (m Renderer) downstreamsFor(instance string, fansOut bool) []render.Downstr
 			Address:   e.Address,
 			Number:    e.Port,
 			Entry:     e.From.Port,
+			Link:      e.Link,
 		}
 		if from := m.InstanceByID(instance); from != nil {
 			d.EntryNumber = from.Ports[e.From.Port].Number
