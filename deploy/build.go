@@ -38,6 +38,9 @@ type Options struct {
 	// LabelPrefix begins the name the service manager knows an instance
 	// by, <LabelPrefix>.<node>.<instance>; DefaultLabelPrefix when empty.
 	LabelPrefix string
+	// Tool identifies the caller in ctl comments, shim markers and plist keys.
+	// DefaultTool when empty; letters, digits, hyphens and underscores.
+	Tool string
 	// Relabel lets Build replace a bundle of the same node and instance
 	// built under another label prefix, as an overwrite the caller has
 	// confirmed. A bundle of another instance is refused whatever it says,
@@ -48,6 +51,31 @@ type Options struct {
 
 // DefaultLabelPrefix is Options.LabelPrefix when it is empty.
 const DefaultLabelPrefix = "rhumb"
+
+// DefaultTool is the bundle owner when Options.Tool is empty.
+const DefaultTool = "rhumb"
+
+func toolName(tool string) (string, error) {
+	if tool == "" {
+		return DefaultTool, nil
+	}
+	if !labelWord.MatchString(tool) {
+		return "", fmt.Errorf("tool %q: use letters, digits, '-' and '_'", tool)
+	}
+	return tool, nil
+}
+
+func toolBundleKey(tool string) string {
+	return strings.ToUpper(tool[:1]) + tool[1:] + "Bundle"
+}
+
+// Preserve the historical default comment byte for byte.
+func toolWriter(tool string) string {
+	if tool == DefaultTool {
+		return "rhumb deploy"
+	}
+	return tool
+}
 
 // labelPrefix is opt's prefix, the default when empty, or an error when
 // it holds what a launchd label or systemd unit name cannot.
@@ -84,11 +112,15 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
+	tool, err := toolName(opt.Tool)
+	if err != nil {
+		return err
+	}
 	if opt.InstallRoot != "" && !path.IsAbs(opt.InstallRoot) {
 		return fmt.Errorf("install root %q is not absolute", opt.InstallRoot)
 	}
 	if m.Container != nil {
-		return buildDocker(m, src, dst, prefix, opt.Relabel)
+		return buildDocker(m, src, dst, prefix, tool, opt.Relabel)
 	}
 	if m.Runtime != "host" {
 		return fmt.Errorf("%s/%s runs in %s and its manifest has no container: its service holds no docker.yaml", m.Node, m.Instance, m.Runtime)
@@ -171,7 +203,7 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
-	ctl, err := renderCtl(tmpl, m, svc, label, source, platform, opt.InstallRoot)
+	ctl, err := renderCtl(tmpl, m, svc, label, source, platform, opt.InstallRoot, tool)
 	if err != nil {
 		return err
 	}
@@ -316,7 +348,7 @@ var ctlTemplates = map[string]*template.Template{
 	"linux":  template.Must(template.New("ctl").Parse(ctlLinux)),
 }
 
-func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, platform, root string) ([]byte, error) {
+func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, platform, root, tool string) ([]byte, error) {
 	args := make([]string, len(svc.Command))
 	for i, a := range svc.Command {
 		args[i] = shellArg(a)
@@ -327,6 +359,7 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		envFiles[i] = shellArg("{conf}/" + f)
 	}
 	err := tmpl.Execute(&out, map[string]any{
+		"Tool": tool, "Writer": toolWriter(tool), "BundleKey": toolBundleKey(tool),
 		"M": m, "Label": label, "Args": strings.Join(args, " "), "Expose": strings.Join(svc.Expose, " "),
 		"EnvFiles": strings.Join(envFiles, " "), "Source": source,
 		"Capabilities": strings.Join(svc.Capabilities, " "),

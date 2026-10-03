@@ -190,7 +190,7 @@ func Compose(m Manifest) ([]byte, error) {
 // compose file, and a ctl that installs them into the container's directory
 // and starts it. The bundle is only the carrier; what runs lives in that
 // directory, so the bundle can be rebuilt or deleted freely.
-func buildDocker(m Manifest, src, dst, prefix string, relabel bool) error {
+func buildDocker(m Manifest, src, dst, prefix, tool string, relabel bool) error {
 	var compose []byte
 	var err error
 	if m.Container != nil && m.Container.Compose != "" {
@@ -218,7 +218,7 @@ func buildDocker(m Manifest, src, dst, prefix string, relabel bool) error {
 	if err := os.WriteFile(filepath.Join(dst, "compose.yaml"), compose, 0o644); err != nil {
 		return err
 	}
-	ctl, err := renderDockerCtl(m, prefix)
+	ctl, err := renderDockerCtl(m, prefix, tool)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func buildDocker(m Manifest, src, dst, prefix string, relabel bool) error {
 
 var dockerCtlTemplate = template.Must(template.New("ctl").Funcs(template.FuncMap{"q": shQuote}).Parse(ctlDocker))
 
-func renderDockerCtl(m Manifest, prefix string) ([]byte, error) {
+func renderDockerCtl(m Manifest, prefix, tool string) ([]byte, error) {
 	type place struct{ From, To, Mode string }
 	var places []place
 	for _, f := range m.Files {
@@ -250,7 +250,8 @@ func renderDockerCtl(m Manifest, prefix string) ([]byte, error) {
 	sort.Slice(creates, func(i, j int) bool { return creates[i].Dir < creates[j].Dir })
 	var out bytes.Buffer
 	err := dockerCtlTemplate.Execute(&out, map[string]any{
-		"M": m, "C": m.Container, "Label": Label(m, prefix), "Places": places, "Creates": creates,
+		"Writer": toolWriter(tool),
+		"M":      m, "C": m.Container, "Label": Label(m, prefix), "Places": places, "Creates": creates,
 		"Reload": strings.Join(quoteAll(m.Container.Reload), " "),
 	})
 	return out.Bytes(), err

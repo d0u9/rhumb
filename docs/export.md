@@ -1068,3 +1068,27 @@ gains the node files, rendering takes the render context in place of the
 per-service secrets file, and selectors match fields in place of path segments.
 The page, the preview and the export keep their shape; what changes under them
 is the tree's top level, from services to nodes.
+
+### Caller identity in bundles
+
+`deploy.Options.Tool` identifies the caller in generated ctl comments, command
+shim markers (`# <tool>-bundle: <bundle-dir>`) and macOS plist metadata
+(`<Tool>Bundle`, with the first letter uppercased, for example `ExampleBundle`).
+It accepts letters, digits, `-` and `_`; omitted means `rhumb`, preserving
+the historical output. Custom comments read `written by <tool>`; the historical
+default remains `written by rhumb deploy`. Tool identity is independent of
+`InstallRoot` and `LabelPrefix`. Container bundles use it in their ctl comment
+as well. The CLI exposes `--tool` for both `deploy build` and `deploy gc`.
+
+`deploy.Leftovers(home, prefix, tool)` scans only that tool's shim markers and
+plist keys; an empty tool means `rhumb`.
+No old-marker compatibility is provided. Before changing the tool name, run
+**the old ctl** `unlink` on each machine, or manually remove its old shims.
+Rebuild/update the bundle and run the new `ctl link` once on each machine.
+It writes the new shims and, for custom tools on macOS, renames the bundle
+key in existing agent/session plists; nothing else in them changes, and the
+running service is left alone.
+New `unlink` and gc ignore the old tool's markers; new `link` refuses to
+overwrite an old shim until it is removed. To roll back, unlink with the
+current ctl, rebuild with the previous tool and relink; on macOS regenerate
+its plist via `ctl enable` or the next `ctl start` as appropriate.
