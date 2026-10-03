@@ -372,4 +372,8 @@ type Member struct {
 	Principals  map[string][]Principal
 	Published   map[string]string
 	Dials       map[string]Downstream
+	// Self is the member's own secrets, what `secret` reads for an instance
+	// rendered on its own: a Shadowsocks port's PSK, a Hysteria2 obfs
+	// password. The process's own secret reads the process, which has none.
+	Self map[string]any
 }

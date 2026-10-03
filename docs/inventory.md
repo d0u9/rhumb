@@ -729,8 +729,8 @@ template: it renders nothing of its own.
 **The process is the target.** It is listed, selected and rendered in its
 members' place, and it belongs to every route its members do. Its template
 reads each member with `members`: name, service, instance, `upstream`,
-`downstreams`, `links`, `principals`, `published` and `dials`, each what that
-member would have been given on its own. Its ports are its members', published
+`downstreams`, `links`, `principals`, `published`, `dials` and `self` (its own
+secrets), each what that member would have been given on its own. Its ports are its members', published
 as theirs are; the name a port is published at stays the member's.
 
 What one program shares, its members share: what runs it, its bind and its
