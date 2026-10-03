@@ -142,10 +142,10 @@ func TestLeftovers_OnlyWhereTheBundleIsGoneAndItsDiskIsNot(t *testing.T) {
 	plist("rhumb.n.gone", filepath.Join(parent, "gone"))
 	plist("rhumb.n.alive", filepath.Join(parent, "alive"))
 	plist("rhumb.n.unmounted", "/Volumes/not-mounted-rhumb-test/b")
-	os.WriteFile(filepath.Join(bin, "gone"), []byte("#!/bin/sh\n"+shimMark+filepath.Join(parent, "gone")+"\n"), 0o755)
+	os.WriteFile(filepath.Join(bin, "gone"), []byte("#!/bin/sh\n"+"# rhumb-bundle: "+filepath.Join(parent, "gone")+"\n"), 0o755)
 	os.WriteFile(filepath.Join(bin, "other"), []byte("#!/bin/sh\necho hi\n"), 0o755)
 
-	got, err := Leftovers(home, "")
+	got, err := Leftovers(home, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

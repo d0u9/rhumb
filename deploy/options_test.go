@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -83,7 +84,7 @@ func TestLeftovers_LabelPrefix(t *testing.T) {
 		os.WriteFile(filepath.Join(agents, label+".plist"), []byte("<key>RhumbBundle</key><string>"+gone+"</string>"), 0o644)
 	}
 	for prefix, want := range map[string]string{"example": "example.host-a.app-01", "": "rhumb.host-a.app-02"} {
-		got, err := Leftovers(home, prefix)
+		got, err := Leftovers(home, prefix, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -125,4 +126,139 @@ func TestBuild_Relabel(t *testing.T) {
 			t.Errorf("%s: err = %v, want another bundle", tc.name, err)
 		}
 	}
+}
+
+func TestBuild_Tool(t *testing.T) {
+	for _, platform := range []string{"linux/amd64", "darwin/arm64"} {
+		t.Run(platform, func(t *testing.T) {
+			src := writeHostExport(t, "")
+			defs := t.TempDir()
+			if err := os.WriteFile(filepath.Join(defs, "microbin.yaml"), []byte("binary:\n  name: microbin\n  path: /opt/example/bin/microbin\ncommand: [microbin]\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			defaults := buildCtl(t, src, Options{Platform: platform, Services: defs})
+			explicit := buildCtl(t, src, Options{Platform: platform, Services: defs, Tool: "rhumb"})
+			if defaults != explicit {
+				t.Fatal("empty tool changed default output")
+			}
+			if !strings.Contains(defaults, "written by rhumb deploy.") || !strings.Contains(defaults, `MARK="# rhumb-bundle: $DIR"`) {
+				t.Fatal("historical default changed")
+			}
+			ctl := buildCtl(t, src, Options{Platform: platform, Services: defs, Tool: "example", InstallRoot: "/srv/example"})
+			for _, want := range []string{"written by example.", `MARK="# example-bundle: $DIR"`} {
+				if !strings.Contains(ctl, want) {
+					t.Fatalf("ctl lacks %q", want)
+				}
+			}
+			if platform == "darwin/arm64" && !strings.Contains(ctl, "<key>ExampleBundle</key>") {
+				t.Fatal("plist uses wrong key")
+			}
+			if strings.Contains(ctl, "rhumb-bundle") || strings.Contains(ctl, "RhumbBundle") || strings.Contains(ctl, "written by rhumb") {
+				t.Fatal("custom tool still contains default branding")
+			}
+		})
+	}
+	src := writeHostExport(t, "")
+	man, _ := ReadManifest(src)
+	man.Container = &Container{Dir: "/srv/example", Name: "app-01", Image: "example/app:1"}
+	ctl, err := renderDockerCtl(man, "example", "example")
+	if err != nil || !strings.Contains(string(ctl), "written by example.") {
+		t.Fatalf("docker tool: %v", err)
+	}
+	for _, tool := range []string{"a b", "a\nb", "$(id)", "a.b"} {
+		err := Build(src, filepath.Join(t.TempDir(), "b"), Options{Platform: "linux/amd64", Tool: tool})
+		if err == nil || !strings.Contains(err.Error(), "tool") {
+			t.Fatalf("tool %q: err = %v, want a tool error", tool, err)
+		}
+	}
+}
+
+func TestLeftovers_Tool(t *testing.T) {
+	home := t.TempDir()
+	agents := filepath.Join(home, "Library", "LaunchAgents")
+	shims := filepath.Join(home, ".local", "bin")
+	for _, dir := range []string{agents, shims} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundle := filepath.Join(t.TempDir(), "gone")
+	for _, tool := range []string{"example", "rhumb", "other"} {
+		label := "example.host-a." + tool
+		if err := os.WriteFile(filepath.Join(agents, label+".plist"), []byte("<key>"+toolBundleKey(tool)+"</key><string>"+bundle+"</string>"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(shims, tool), []byte("#!/bin/sh\n# "+tool+"-bundle: "+bundle+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Leftovers(home, "example", "example")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("leftovers = %v, %v", got, err)
+	}
+	for _, l := range got {
+		if l.Path != filepath.Join(shims, "example") && l.Path != filepath.Join(agents, "example.host-a.example.plist") {
+			t.Fatal("gc recognized another tool")
+		}
+	}
+	if _, err := Leftovers(home, "example", "bad name"); err == nil {
+		t.Fatal("gc accepted invalid tool")
+	}
+}
+
+func TestCtl_ToolLinkAndUnlink(t *testing.T) {
+	home, dst, defs := t.TempDir(), t.TempDir(), t.TempDir()
+	var err error
+	dst, err = filepath.EvalSymlinks(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := writeHostExport(t, "")
+	if err := os.WriteFile(filepath.Join(defs, "microbin.yaml"), []byte("binary:\n  name: microbin\n  path: /opt/example/bin/microbin\ncommand: [microbin]\nexpose: [demo]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Build(src, dst, Options{Platform: "darwin/arm64", Binary: "/bin/sh", Services: defs, Tool: "example", LabelPrefix: "example"}); err != nil {
+		t.Fatal(err)
+	}
+	agent := filepath.Join(home, "Library", "LaunchAgents", "example.host-a.app-01.plist")
+	if err := os.MkdirAll(filepath.Dir(agent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agent, []byte("<dict>\n\t<key>RhumbBundle</key><string>/srv/example</string>\n\t\t<key>PATH</key><string>/opt/example/bin</string>\n</dict>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(action string, wantOK bool) {
+		t.Helper()
+		cmd := exec.Command("/bin/sh", filepath.Join(dst, "ctl"), action)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if (err == nil) != wantOK {
+			t.Fatalf("%s: %v: %s", action, err, out)
+		}
+	}
+	run("link", true)
+	shim := filepath.Join(home, ".local", "bin", "demo")
+	data, err := os.ReadFile(shim)
+	if err != nil || !strings.Contains(string(data), "# example-bundle: "+dst) {
+		t.Fatal("link did not write custom marker")
+	}
+	data, err = os.ReadFile(agent)
+	if err != nil || !strings.Contains(string(data), "<key>ExampleBundle</key>") || strings.Contains(string(data), "RhumbBundle") {
+		t.Fatal("link did not update existing plist")
+	}
+	if !strings.Contains(string(data), "<string>/opt/example/bin</string>") {
+		t.Fatal("link changed plist beyond its bundle key")
+	}
+	run("unlink", true)
+	if _, err := os.Stat(shim); !os.IsNotExist(err) {
+		t.Fatal("unlink did not recognize new marker")
+	}
+	if err := os.WriteFile(shim, []byte("#!/bin/sh\n# rhumb-bundle: "+dst+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run("unlink", true)
+	if _, err := os.Stat(shim); err != nil {
+		t.Fatal("unlink removed another tool's shim")
+	}
+	run("link", false)
 }

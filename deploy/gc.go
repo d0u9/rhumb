@@ -21,21 +21,24 @@ type Leftover struct {
 	Bundle string
 }
 
-var bundleKey = regexp.MustCompile(`<key>RhumbBundle</key><string>([^<]*)</string>`)
-
-const shimMark = "# rhumb-bundle: "
-
 // Leftovers lists what gc would remove under home, looking for launchd
 // entries under the label prefix bundles were built with (Options.
 // LabelPrefix; DefaultLabelPrefix when empty). A shim is found by its
-// mark, whatever the prefix. A bundle counts as gone
+// mark for tool (DefaultTool when empty), whatever the prefix.
+// A bundle counts as gone
 // only when its parent directory is still there: a bundle on a disk that is
 // not mounted looks gone too, and its service is not ours to remove.
-func Leftovers(home, prefix string) ([]Leftover, error) {
+func Leftovers(home, prefix, tool string) ([]Leftover, error) {
 	prefix, err := labelPrefix(prefix)
 	if err != nil {
 		return nil, err
 	}
+	tool, err = toolName(tool)
+	if err != nil {
+		return nil, err
+	}
+	bundleKey := regexp.MustCompile(`<key>` + regexp.QuoteMeta(toolBundleKey(tool)) + `</key><string>([^<]*)</string>`)
+	mark := "# " + tool + "-bundle: "
 	var out []Leftover
 	plists, _ := filepath.Glob(filepath.Join(home, "Library", "LaunchAgents", prefix+".*.plist"))
 	for _, p := range plists {
@@ -58,7 +61,7 @@ func Leftovers(home, prefix string) ([]Leftover, error) {
 	}
 	for _, e := range shims {
 		p := filepath.Join(home, ".local", "bin", e.Name())
-		if bundle := shimBundle(p); bundle != "" && gone(bundle) {
+		if bundle := shimBundle(p, mark); bundle != "" && gone(bundle) {
 			out = append(out, Leftover{Kind: "shim", Path: p, Bundle: bundle})
 		}
 	}
@@ -91,7 +94,7 @@ func gone(bundle string) bool {
 
 // shimBundle is the bundle a shim names on its second line, and empty for
 // any other file.
-func shimBundle(path string) string {
+func shimBundle(path, mark string) string {
 	f, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -99,7 +102,7 @@ func shimBundle(path string) string {
 	defer f.Close()
 	s := bufio.NewScanner(f)
 	for i := 0; i < 2 && s.Scan(); i++ {
-		if b, ok := strings.CutPrefix(s.Text(), shimMark); ok {
+		if b, ok := strings.CutPrefix(s.Text(), mark); ok {
 			return b
 		}
 	}

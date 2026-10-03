@@ -29,6 +29,7 @@ func runDeploy(args []string, out, errOut io.Writer) error {
 		fs.StringVar(&opt.Services, "services", "", "directory of service definitions to prefer")
 		fs.StringVar(&opt.InstallRoot, "install-root", "", "where a Linux host bundle with no dir is installed, as <root>/<service>; "+deploy.DefaultInstallRoot+" by default")
 		fs.BoolVar(&opt.Relabel, "relabel", false, "replace a bundle of the same instance built under another label prefix; not for a macOS bundle")
+		fs.StringVar(&opt.Tool, "tool", "", "tool name for bundle ownership markers; rhumb by default")
 		fs.StringVar(&opt.LabelPrefix, "label-prefix", "", "prefix of the systemd unit and launchd label, <prefix>.<node>.<instance>; "+deploy.DefaultLabelPrefix+" by default")
 		if err := fs.Parse(interleaved(fs, args[1:])); err != nil {
 			return err
@@ -42,6 +43,7 @@ func runDeploy(args []string, out, errOut io.Writer) error {
 		fmt.Fprintf(out, "wrote %s; install with %s/ctl install\n", *to, *to)
 		return nil
 	case "gc":
+		tool := fs.String("tool", "", "tool name the bundles were built with; rhumb by default")
 		yes := fs.Bool("yes", false, "remove what is listed")
 		prefix := fs.String("label-prefix", "", "label prefix the bundles were built with; "+deploy.DefaultLabelPrefix+" by default")
 		if err := fs.Parse(args[1:]); err != nil {
@@ -51,7 +53,7 @@ func runDeploy(args []string, out, errOut io.Writer) error {
 		if err != nil {
 			return err
 		}
-		left, err := deploy.Leftovers(home, *prefix)
+		left, err := deploy.Leftovers(home, *prefix, *tool)
 		if err != nil {
 			return err
 		}
