@@ -125,10 +125,20 @@ func (s Sources) Names() []string {
 //go:embed services
 var builtin embed.FS
 
-// shipped is the files a built-in definition puts in bin/ beside the
-// program, by name.
-func shipped(name string) (map[string][]byte, error) {
-	entries, err := fs.ReadDir(builtin, "services/"+name)
+// shipped is the files a definition puts in bin/ beside the program, by
+// name. They come from where LoadService(name, dir) reads the definition:
+// <dir>/<name>/ for a definition dir holds, with nothing from rhumb's own,
+// and services/<name>/ built in otherwise. Subdirectories are skipped.
+func shipped(name, dir string) (map[string][]byte, error) {
+	fsys, root := fs.FS(builtin), "services/"+name
+	if dir != "" {
+		if _, err := os.Stat(filepath.Join(dir, name+".yaml")); err == nil {
+			fsys, root = os.DirFS(dir), name
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	}
+	entries, err := fs.ReadDir(fsys, root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -140,7 +150,7 @@ func shipped(name string) (map[string][]byte, error) {
 		if e.IsDir() {
 			continue
 		}
-		data, err := fs.ReadFile(builtin, "services/"+name+"/"+e.Name())
+		data, err := fs.ReadFile(fsys, root+"/"+e.Name())
 		if err != nil {
 			return nil, err
 		}
