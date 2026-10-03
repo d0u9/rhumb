@@ -2592,10 +2592,10 @@ failing can be told which level it was reading.
     the port.
 23. An instance's `runtime`, after it takes its node's, is `host`, `docker`
     or `podman`. The error lists the three.
-24. An instance writing `deploy` names a service holding a `docker.yaml` or a
-    `deploy/` directory, and its `runtime` is not `host`. A container's
-    deployment is what the key is for, and a host process writing one starts
-    nothing. For a `docker.yaml` service, `deploy` holds only the keys the
+24. A `host` instance's `deploy` holds only `dir`, an absolute path: where its
+    bundle installs it. A host process renders no deployment file, so any
+    other key starts nothing. Any other instance writing `deploy` names a
+    service holding a `docker.yaml` or a `deploy/` directory. For a `docker.yaml` service, `deploy` holds only the keys the
     deployment tool reads: `image`, `restart`, `dir`, `container_name`,
     `hostname`, `account`, `dns`, `volumes`. `rhumb check` names any other.
 25. No `deploy` mapping writes a port mapping or a secret. Both are derived or

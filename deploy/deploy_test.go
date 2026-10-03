@@ -145,7 +145,7 @@ func TestLeftovers_OnlyWhereTheBundleIsGoneAndItsDiskIsNot(t *testing.T) {
 	os.WriteFile(filepath.Join(bin, "gone"), []byte("#!/bin/sh\n"+shimMark+filepath.Join(parent, "gone")+"\n"), 0o755)
 	os.WriteFile(filepath.Join(bin, "other"), []byte("#!/bin/sh\necho hi\n"), 0o755)
 
-	got, err := Leftovers(home)
+	got, err := Leftovers(home, "")
 	if err != nil {
 		t.Fatal(err)
 	}

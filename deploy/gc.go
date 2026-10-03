@@ -25,12 +25,19 @@ var bundleKey = regexp.MustCompile(`<key>RhumbBundle</key><string>([^<]*)</strin
 
 const shimMark = "# rhumb-bundle: "
 
-// Leftovers lists what gc would remove under home. A bundle counts as gone
+// Leftovers lists what gc would remove under home, looking for launchd
+// entries under the label prefix bundles were built with (Options.
+// LabelPrefix; DefaultLabelPrefix when empty). A shim is found by its
+// mark, whatever the prefix. A bundle counts as gone
 // only when its parent directory is still there: a bundle on a disk that is
 // not mounted looks gone too, and its service is not ours to remove.
-func Leftovers(home string) ([]Leftover, error) {
+func Leftovers(home, prefix string) ([]Leftover, error) {
+	prefix, err := labelPrefix(prefix)
+	if err != nil {
+		return nil, err
+	}
 	var out []Leftover
-	plists, _ := filepath.Glob(filepath.Join(home, "Library", "LaunchAgents", "rhumb.*.plist"))
+	plists, _ := filepath.Glob(filepath.Join(home, "Library", "LaunchAgents", prefix+".*.plist"))
 	for _, p := range plists {
 		data, err := os.ReadFile(p)
 		if err != nil {

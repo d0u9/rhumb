@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"text/template"
@@ -30,7 +31,37 @@ type Options struct {
 	// machine online, or DownloadBuild into the bundle. Empty is what the
 	// manifest's node says, and DownloadInstall when it says nothing.
 	Download string
+	// InstallRoot is where a Linux host bundle whose manifest names no dir
+	// is installed, as <InstallRoot>/<service>; DefaultInstallRoot when
+	// empty. A macOS bundle with no dir stays where it was unpacked.
+	InstallRoot string
+	// LabelPrefix begins the name the service manager knows an instance
+	// by, <LabelPrefix>.<node>.<instance>; DefaultLabelPrefix when empty.
+	LabelPrefix string
+	// Relabel lets Build replace a bundle of the same node and instance
+	// built under another label prefix, as an overwrite the caller has
+	// confirmed. A bundle of another instance is refused whatever it says,
+	// and so is a macOS one: it is installed where it is, and replacing it
+	// would leave its launchd entry under the old label behind.
+	Relabel bool
 }
+
+// DefaultLabelPrefix is Options.LabelPrefix when it is empty.
+const DefaultLabelPrefix = "rhumb"
+
+// labelPrefix is opt's prefix, the default when empty, or an error when
+// it holds what a launchd label or systemd unit name cannot.
+func labelPrefix(prefix string) (string, error) {
+	if prefix == "" {
+		return DefaultLabelPrefix, nil
+	}
+	if !labelWord.MatchString(prefix) {
+		return "", fmt.Errorf("label prefix %q: use letters, digits, '-' and '_'", prefix)
+	}
+	return prefix, nil
+}
+
+var labelWord = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // When a release is downloaded.
 const (
@@ -49,8 +80,15 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
+	prefix, err := labelPrefix(opt.LabelPrefix)
+	if err != nil {
+		return err
+	}
+	if opt.InstallRoot != "" && !path.IsAbs(opt.InstallRoot) {
+		return fmt.Errorf("install root %q is not absolute", opt.InstallRoot)
+	}
 	if m.Container != nil {
-		return buildDocker(m, src, dst)
+		return buildDocker(m, src, dst, prefix, opt.Relabel)
 	}
 	if m.Runtime != "host" {
 		return fmt.Errorf("%s/%s runs in %s and its manifest has no container: its service holds no docker.yaml", m.Node, m.Instance, m.Runtime)
@@ -79,9 +117,9 @@ func Build(src, dst string, opt Options) error {
 	if len(svc.Capabilities) > 0 && !strings.HasPrefix(platform, "linux/") {
 		return fmt.Errorf("service %q: capabilities are Linux's; %s has none to give", m.Service, platform)
 	}
-	label := Label(m)
-	if old, err := os.ReadFile(filepath.Join(dst, "ctl")); err == nil && !bytes.Contains(old, []byte("LABEL="+label+"\n")) {
-		return fmt.Errorf("%s holds another bundle; not replacing it", dst)
+	label := Label(m, prefix)
+	if err := checkReplace(dst, m, label, opt.Relabel && !strings.HasPrefix(platform, "darwin/")); err != nil {
+		return err
 	}
 
 	for _, d := range []string{"bin", "conf"} {
@@ -133,7 +171,7 @@ func Build(src, dst string, opt Options) error {
 	if err != nil {
 		return err
 	}
-	ctl, err := renderCtl(tmpl, m, svc, label, source, platform)
+	ctl, err := renderCtl(tmpl, m, svc, label, source, platform, opt.InstallRoot)
 	if err != nil {
 		return err
 	}
@@ -152,10 +190,28 @@ func downloadFor(m Manifest, opt Options) string {
 	return DownloadInstall
 }
 
-// Label is the name the service manager knows an instance by. The prefix is
-// what gc recognises as rhumb's.
-func Label(m Manifest) string {
-	return "rhumb." + m.Node + "." + m.Instance
+// checkReplace refuses to build into dst when its ctl is another bundle's.
+// With relabel, a bundle of the same node and instance under another label
+// prefix is the same bundle.
+func checkReplace(dst string, m Manifest, label string, relabel bool) error {
+	old, err := os.ReadFile(filepath.Join(dst, "ctl"))
+	if err != nil || bytes.Contains(old, []byte("LABEL="+label+"\n")) {
+		return nil
+	}
+	if relabel {
+		if found := oldLabel.FindSubmatch(old); found != nil && strings.HasSuffix(string(found[1]), "."+m.Node+"."+m.Instance) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s holds another bundle; not replacing it", dst)
+}
+
+var oldLabel = regexp.MustCompile(`(?m)^LABEL=(\S+)$`)
+
+// Label is the name the service manager knows an instance by, under prefix.
+// gc looks for launchd entries under the same prefix.
+func Label(m Manifest, prefix string) string {
+	return prefix + "." + m.Node + "." + m.Instance
 }
 
 func copyFile(from, to string, mode os.FileMode) error {
@@ -260,7 +316,7 @@ var ctlTemplates = map[string]*template.Template{
 	"linux":  template.Must(template.New("ctl").Parse(ctlLinux)),
 }
 
-func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, platform string) ([]byte, error) {
+func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, platform, root string) ([]byte, error) {
 	args := make([]string, len(svc.Command))
 	for i, a := range svc.Command {
 		args[i] = shellArg(a)
@@ -277,7 +333,7 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 		"Requires":     strings.Join(svc.Requires, " "),
 		"HookStart":    shellArgs(svc.Hooks.Start), "HookStop": shellArgs(svc.Hooks.Stop),
 		"Notice": shellArgs(svc.Notice),
-		"Dir":    installDir(m, platform), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
+		"Dir":    installDir(m, platform, root), "SelfSigned": selfSigned(m, svc), "BinDir": binDir(svc, source), "InstallBinary": installBinary(svc, source, platform),
 	})
 	if err != nil {
 		return nil, err
@@ -286,7 +342,8 @@ func renderCtl(tmpl *template.Template, m Manifest, svc Service, label, source, 
 }
 
 // DefaultInstallRoot is where a Linux host bundle is installed when its
-// manifest names no dir: <root>/<service>, beside /srv/docker.
+// manifest names no dir and Options.InstallRoot is empty:
+// <root>/<service>, beside /srv/docker.
 const DefaultInstallRoot = "/srv/rhumb"
 
 // selfSigned is the body of ctl's self_signed: what makes the service's
@@ -326,15 +383,20 @@ func selfSigned(m Manifest, svc Service) string {
 }
 
 // installDir is the shell word ctl sets DIR to: where install puts the
-// bundle. A macOS bundle with no dir stays where it was unpacked.
-func installDir(m Manifest, platform string) string {
+// bundle: the manifest's dir, else <root>/<service>, root being
+// DefaultInstallRoot when empty. A macOS bundle with no dir stays where it
+// was unpacked.
+func installDir(m Manifest, platform, root string) string {
 	if m.Dir != "" {
 		return shQuote(m.Dir)
 	}
 	if strings.HasPrefix(platform, "darwin/") {
 		return `"$HERE"`
 	}
-	return shQuote(path.Join(DefaultInstallRoot, m.Service))
+	if root == "" {
+		root = DefaultInstallRoot
+	}
+	return shQuote(path.Join(root, m.Service))
 }
 
 // binDir is the shell expression ctl sets BIN to: the directory the

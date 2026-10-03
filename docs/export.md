@@ -801,7 +801,8 @@ A host instance's bundle picks its release and its service manager by
 `ctl install` copies the bundle into the instance's `deploy.dir` when there is
 one: `ctl`, `bin/`, `conf/` and `manifest.yaml` are replaced and `var/` is
 kept, so the unpacked bundle may be deleted after. On Linux the dir defaults to
-`/srv/rhumb/<service>`, beside `/srv/docker/<service>`, and install registers
+`<root>/<service>`, where `<root>` is `rhumb deploy build --install-root` and
+`/srv/rhumb` when that is not given, beside `/srv/docker/<service>`; install registers
 and starts the unit, which runs as the owner of the unpacked bundle with the
 install dir's `var/` as its working directory.
 
@@ -820,8 +821,19 @@ its configuration was rendered with. The export narrows those routes with
 `route:` terms in the selector — `node:laptop profile:singbox route:sea-hy2` is
 the same program over only that route, this once.
 
+The service manager knows the instance as `<prefix>.<node>.<instance>`: the
+systemd unit `/etc/systemd/system/<label>.service` and the launchd label and
+LaunchAgent plist. `<prefix>` is `--label-prefix`, `rhumb` when not given;
+`rhumb deploy gc` takes the same flag to find launchd entries built under it.
+A bundle built under one prefix and rebuilt under another is refused, since
+its `ctl` names another label, unless `--relabel` is given and the bundle is the
+same node and instance. A macOS bundle is refused even then: it is installed
+where it is, and its launchd entry under the old label would be left behind, so
+`ctl uninstall` it first.
+
 A definition may ship files beside its YAML, in `services/<name>/`; they are
-put in the bundle's `bin/`. `requires` names programs the machine must have,
+put in the bundle's `bin/`. A definition read from `--services <dir>` ships
+`<dir>/<name>/` instead, and none of the built-in files. `requires` names programs the machine must have,
 which install checks for; a launchd plist keeps the `$PATH` it was written
 with, so a program found through a version manager is found again. A release
 whose binary is not at the top of its archive names it with `member`.
