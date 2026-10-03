@@ -896,16 +896,31 @@ func TestValidate_DeployWithoutADeployDirectory(t *testing.T) {
 	}
 }
 
-// TestValidate_DeployOnAHostProcess is the other half of rule 24: a
-// deployment file is a container's, and a host process renders none.
+// TestValidate_DeployOnAHostProcess is the other half of rule 24: a host
+// process renders no deployment file, so its deploy holds only dir.
 func TestValidate_DeployOnAHostProcess(t *testing.T) {
-	inv := validInventory()
-	inv.Nodes[0].Instances[0].Deploy = map[string]any{"image": "example:1"}
-	manifests := validManifests()
-	manifests["ssserver"] = confgen.Manifest{Auth: confgen.AuthPerPrincipal, Exports: []string{"ss-json"}, Template: "t", Deploys: true}
-	got := Validate(inv, manifests, validExports(), derived(t, inv, manifests), nil)
-	if !containsSubstring(got, `runs as a host process`) {
-		t.Fatalf("Validate = %v, want a host-process issue", messages(got))
+	for _, tc := range []struct {
+		deploy map[string]any
+		want   string // "" when the mapping is fine
+	}{
+		{map[string]any{"dir": "/srv/example/app"}, ""},
+		{map[string]any{"image": "example:1"}, `deploy "image": a host process renders no deployment file`},
+		{map[string]any{"dir": "/srv/example/app", "restart": "always"}, `deploy "restart"`},
+		{map[string]any{"dir": "srv/example/app"}, `deploy dir srv/example/app is not an absolute path`},
+	} {
+		inv := validInventory()
+		inv.Nodes[0].Instances[0].Deploy = tc.deploy
+		manifests := validManifests()
+		got := Validate(inv, manifests, validExports(), derived(t, inv, manifests), nil)
+		if tc.want == "" {
+			if len(got) != 0 {
+				t.Fatalf("Validate with deploy %v = %v, want none", tc.deploy, messages(got))
+			}
+			continue
+		}
+		if !containsSubstring(got, tc.want) {
+			t.Fatalf("Validate with deploy %v = %v, want %q", tc.deploy, messages(got), tc.want)
+		}
 	}
 }
 

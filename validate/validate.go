@@ -17,6 +17,7 @@ package validate
 import (
 	"fmt"
 	"net/netip"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -783,9 +784,10 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 	}
 
 	// Rules 24 and 25: what an instance's `deploy` may say, and where it
-	// may say it. A host process renders no deployment file, and neither
-	// does an instance of a service that declares no deploy/ — in both
-	// cases the mapping would be read by nothing. What it may not hold is
+	// may say it. A host process renders no deployment file, so its
+	// mapping holds only `dir`, the absolute path its bundle installs to;
+	// a container of a service that declares no deploy/ renders none
+	// either, and its mapping would be read by nothing. What it may not hold is
 	// a port mapping or a secret: the first is derived from `ports` and
 	// the resolved edges, the second stays in the configuration file
 	// beside it, and a second spelling of either is the thing the second
@@ -795,13 +797,25 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		if inst.Deploy == nil {
 			continue
 		}
+		if !inst.Containerised() {
+			// A host process renders no deployment file, but a bundle
+			// installs it, and `dir` is where: the one key it may write.
+			for _, key := range deployKeys(inst.Deploy) {
+				if key != "dir" {
+					add("instance %q: deploy %q: a %s process renders no deployment file, and its deploy takes only dir, where its bundle installs it",
+						id, key, inventory.RuntimeHost)
+				}
+			}
+			if dir, ok := inst.Deploy["dir"]; ok {
+				if s, _ := dir.(string); !path.IsAbs(s) {
+					add("instance %q: deploy dir %v is not an absolute path", id, dir)
+				}
+			}
+			continue
+		}
 		if !manifests[inst.Service].Deploys {
 			add("instance %q writes deploy values, and service %q holds neither a %s/ directory nor a %s to start it from",
 				id, inst.Service, confgen.DeployDir, confgen.DockerFilename)
-		}
-		if !inst.Containerised() {
-			add("instance %q writes deploy values and runs as a %s process, which renders no deployment file",
-				id, inventory.RuntimeHost)
 		}
 		for _, key := range deployKeys(inst.Deploy) {
 			switch key {
