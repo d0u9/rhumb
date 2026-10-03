@@ -5,6 +5,7 @@ import (
 
 	"github.com/d0u9/rhumb/inventory"
 	"github.com/d0u9/rhumb/render"
+	"github.com/d0u9/rhumb/secretstore"
 )
 
 // memberFor is what one member of a process would have been given rendered
@@ -39,6 +40,11 @@ func (m Renderer) memberFor(id string) (render.Member, error) {
 	}
 	if mb.Dials, err = m.dialsFor(id); err != nil {
 		return render.Member{}, err
+	}
+	if m.SecretsDir != "" {
+		if mb.Self, err = secretstore.ReadSelf(m.SecretsDir, m.secretID(id)); err != nil {
+			return render.Member{}, err
+		}
 	}
 	return mb, nil
 }
