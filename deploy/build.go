@@ -107,7 +107,7 @@ func Build(src, dst string, opt Options) error {
 	if err := copyFile(filepath.Join(src, ManifestFile), filepath.Join(dst, ManifestFile), 0o600); err != nil {
 		return err
 	}
-	ships, err := shipped(m.Service)
+	ships, err := shipped(m.Service, opt.Services)
 	if err != nil {
 		return err
 	}
