@@ -7,6 +7,11 @@
 # Local Go workspace: it points at sibling checkouts on one machine
 go.work
 go.work.sum
+# Private handoff notes belong outside this repository.
+*[Hh][Aa][Nn][Dd][Oo][Ff][Ff]*.md
+*[Hh][Aa][Nn][Dd][Oo][Ff][Ff]*.txt
+*[Hh][Aa][Nn][Dd][Oo][Vv][Ee][Rr]*.md
+*[Hh][Aa][Nn][Dd]-[Oo][Ff][Ff]*.md
 
 # Editors and OS
 .DS_Store
