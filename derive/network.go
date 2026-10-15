@@ -42,22 +42,24 @@ func resolveEndpoint(from inventory.Instance, fromNode inventory.Node, to invent
 	return "127.0.0.1", "", "", nil
 }
 
-// Name is one entry of a network's name table: a name and the address that
-// answers it there. Source says where it was written, for an error.
+// Name is a backend-neutral DNS record. Source identifies its authored origin.
 type Name struct {
-	Name    string
-	Address string
-	Source  string
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Value  string `json:"value"`
+	Source string `json:"source"`
+	// External permits a domain endpoint to terminate outside the authored table.
+	External bool `json:"-"`
 }
 
 // Names is every network's name table, in name order, and the conflicts
-// rule 30 reports: one name reaching two addresses on one network. See
+// rule 30 reports: duplicate names and invalid CNAME graphs on a network. See
 // docs/inventory.md#names-on-a-network.
 //
 // fansOut says whether an instance is a proxy dispatching by name; only a
 // route entered through one moves a name to the proxy's node, since a relay
-// forwards bytes and never answers to a name. An address written as a
-// hostname is left out: a resolver's record wants an IP address.
+// forwards bytes and never answers to a name. A domain endpoint produces a
+// CNAME to that explicit external hostname.
 func Names(inv *inventory.Root, fansOut func(instance string) bool) (map[string][]Name, []string) {
 	nodeOf := map[string]inventory.Node{}
 	for _, n := range inv.Nodes {
@@ -91,17 +93,54 @@ func Names(inv *inventory.Root, fansOut func(instance string) bool) (map[string]
 				}
 				for _, name := range p.Names {
 					for network, addr := range at.Networks {
-						add(network, Name{Name: name, Address: addr, Source: inst.ID + ":" + port})
+						// The canonical domain endpoint is already maintained externally.
+						if inventory.ValidDNSName(addr) && canonicalName(name) == canonicalName(addr) {
+							continue
+						}
+						record := Name{Name: name, Source: inst.ID + ":" + port}
+						h := inv.Hosts[at.Host]
+						endpoint := h.Endpoints[network]
+						var matches []string
+						for device, refs := range h.Names {
+							for _, ref := range refs {
+								if ref.Endpoint == network || (ref.Endpoint == "" && endpoint.From != nil && ref.Interface == endpoint.From.Interface && ref.Address == endpoint.From.Address) {
+									matches = append(matches, canonicalName(device))
+									break
+								}
+							}
+						}
+						sort.Strings(matches)
+						if len(matches) > 1 {
+							tables.conflicts = append(tables.conflicts, fmt.Sprintf("%s: endpoint on network %q matches multiple device names: %s", record.Source, network, strings.Join(matches, ", ")))
+							continue
+						}
+						if len(matches) == 1 {
+							record.Type, record.Value = "CNAME", matches[0]
+						} else {
+							var ok bool
+							record, ok = addressName(name, addr, record.Source)
+							if !ok {
+								if !inventory.ValidDNSName(addr) {
+									continue
+								}
+								record = Name{Name: name, Type: "CNAME", Value: addr, Source: inst.ID + ":" + port, External: true}
+							}
+						}
+						tables.addPublished(network, record)
 					}
 				}
 			}
 		}
 	}
-	for id, h := range inv.Hosts {
-		for _, name := range h.Names {
-			add(h.Network, Name{Name: name, Address: h.Address, Source: "host " + id})
+	for _, member := range inv.NetworkMembers() {
+		for _, name := range member.Names {
+			if record, ok := addressName(name, member.Address, strings.TrimSuffix(member.Source, ".ip")+".names"); ok {
+				add(member.Network, record)
+			}
 		}
 	}
+	tables.addDeviceNames(inv)
+	tables.addAliases(inv.Names)
 	return tables.result()
 }
 
@@ -149,7 +188,9 @@ func ContainerNames(inv *inventory.Root, nodeID string, fansOut func(instance st
 					continue
 				}
 				for _, name := range p.Names {
-					tables.add(c.Name, Name{Name: name, Address: address, Source: inst.ID + ":" + port})
+					if record, ok := addressName(name, address, inst.ID+":"+port); ok {
+						tables.addPublished(c.Name, record)
+					}
 				}
 			}
 		}
@@ -183,21 +224,53 @@ func fronts(inv *inventory.Root, fansOut func(instance string) bool) map[string]
 }
 
 // nameTables collects name tables keyed by network, keeping the first
-// address a name reaches and recording any second one as a conflict. kind
+// record and reporting every duplicate name as a conflict. kind
 // is how a conflict names the table's key.
 type nameTables struct {
-	kind      string
-	byKey     map[string]map[string]Name
-	conflicts []string
+	kind          string
+	byKey         map[string]map[string]Name
+	conflicts     []string
+	publishedSeen map[[3]string]bool
 }
 
 func newNameTables(kind string) *nameTables {
 	return &nameTables{kind: kind, byKey: map[string]map[string]Name{}}
 }
 
-func (t *nameTables) add(key string, n Name) {
-	if _, err := netip.ParseAddr(n.Address); err != nil {
+// Several published ports may describe the same DNS record, including process members.
+func (t *nameTables) addPublished(key string, n Name) {
+	if t.publishedSeen == nil {
+		t.publishedSeen = map[[3]string]bool{}
+	}
+	declaration := [3]string{key, canonicalName(n.Name), n.Source}
+	if t.publishedSeen[declaration] {
+		t.conflicts = append(t.conflicts, fmt.Sprintf("on %s %q, duplicate name %q at %s", t.kind, key, n.Name, n.Source))
 		return
+	}
+	t.publishedSeen[declaration] = true
+	prev, exists := t.byKey[key][canonicalName(n.Name)]
+	value := n.Value
+	if n.Type == "CNAME" {
+		value = canonicalName(value)
+	}
+	if exists && prev.Type == n.Type && prev.Value == value {
+		if n.Source < prev.Source {
+			prev.Source = n.Source
+			t.byKey[key][prev.Name] = prev
+		}
+		return
+	}
+	t.add(key, n)
+}
+
+func (t *nameTables) add(key string, n Name) {
+	n.Name = canonicalName(n.Name)
+	if !inventory.ValidDNSName(n.Name) {
+		t.conflicts = append(t.conflicts, fmt.Sprintf("%s: invalid DNS name %q", n.Source, n.Name))
+		return
+	}
+	if n.Type == "CNAME" {
+		n.Value = canonicalName(n.Value)
 	}
 	table := t.byKey[key]
 	if table == nil {
@@ -205,10 +278,8 @@ func (t *nameTables) add(key string, n Name) {
 		t.byKey[key] = table
 	}
 	if prev, ok := table[n.Name]; ok {
-		if prev.Address != n.Address {
-			t.conflicts = append(t.conflicts, fmt.Sprintf("on %s %q, name %q resolves to %s (%s) and %s (%s)",
-				t.kind, key, n.Name, prev.Address, prev.Source, n.Address, n.Source))
-		}
+		t.conflicts = append(t.conflicts, fmt.Sprintf("on %s %q, duplicate name %q resolves to %s (%s) and %s (%s)",
+			t.kind, key, n.Name, prev.Type+" "+prev.Value, prev.Source, n.Type+" "+n.Value, n.Source))
 		return
 	}
 	table[n.Name] = n
@@ -222,6 +293,10 @@ func (t *nameTables) result() (map[string][]Name, []string) {
 			list = append(list, n)
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
+		_, issues := resolveNames(list, false)
+		for _, issue := range issues {
+			t.conflicts = append(t.conflicts, fmt.Sprintf("on %s %q: %s", t.kind, key, issue))
+		}
 		out[key] = list
 	}
 	sort.Strings(t.conflicts)
@@ -231,25 +306,23 @@ func (t *nameTables) result() (map[string][]Name, []string) {
 // Reservation is one line of what a network's router is given: a member
 // with a hardware address, and the address it is to receive.
 type Reservation struct {
-	ID      string
-	Address string
-	MAC     string
+	Host, Interface, AddressID string
+	ID                         string
+	Address                    string
+	MAC                        string
 }
 
-// Reservations is every node and host on network with a mac, in address
-// order. See docs/inventory.md#what-the-router-is-given.
+// Reservations collects explicit interface reservations,
+// in address order. See docs/inventory.md#what-the-router-is-given.
 func Reservations(inv *inventory.Root, network string) []Reservation {
 	var out []Reservation
-	for _, n := range inv.Nodes {
-		if mac := n.MACs[network]; n.Broken == "" && mac != "" {
-			out = append(out, Reservation{ID: n.ID, Address: n.Networks[network], MAC: mac})
+	for _, m := range inv.NetworkMembers() {
+		if m.Network != network || !m.Reservation {
+			continue
 		}
+		out = append(out, Reservation{ID: m.Host + "/" + m.Interface + "/" + m.AddressID, Address: m.Address, MAC: m.MAC, Host: m.Host, Interface: m.Interface, AddressID: m.AddressID})
 	}
-	for id, h := range inv.Hosts {
-		if h.Network == network && h.MAC != "" {
-			out = append(out, Reservation{ID: id, Address: h.Address, MAC: h.MAC})
-		}
-	}
+
 	sort.Slice(out, func(i, j int) bool {
 		a, errA := netip.ParseAddr(out[i].Address)
 		b, errB := netip.ParseAddr(out[j].Address)

@@ -61,7 +61,11 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 	if err != nil {
 		return err
 	}
-	if oldID == newID && len(networkChanges) == 0 && len(instanceChanges) == 0 && len(routeChanges) == 0 && len(publishedChanges) == 0 {
+	hostChanges, err := parseHostChanges(flags["host-edit"])
+	if err != nil {
+		return err
+	}
+	if oldID == newID && len(networkChanges) == 0 && len(instanceChanges) == 0 && len(routeChanges) == 0 && len(publishedChanges) == 0 && len(hostChanges) == 0 {
 		return fmt.Errorf("give a new node ID, network name, or address")
 	}
 
@@ -80,6 +84,7 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 	// reach the loaded snapshot, which is the source for the before/after diff.
 	inv := *l.Inv
 	inv.Nodes = append([]inventory.Node(nil), l.Inv.Nodes...)
+	inv.Hosts = cloneHosts(l.Inv.Hosts)
 	index := -1
 	for i := range inv.Nodes {
 		if inv.Nodes[i].ID == oldID {
@@ -96,7 +101,7 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 	// Validate the whole set against the original names before any rename.
 	// This rejects ambiguous chains and swaps such as A -> B, B -> C.
 	for _, change := range networkChanges {
-		if _, ok := before.Networks[change.From]; !ok {
+		if !migrationNodeNetworks(&inv, before)[change.From] {
 			return fmt.Errorf("node %q has no address on network %q", oldID, change.From)
 		}
 		if change.From != change.To {
@@ -107,6 +112,9 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 			}
 		}
 	}
+	if err := applyHostChanges(&inv, index, hostChanges); err != nil {
+		return err
+	}
 	renamedRefs := map[string][]string{}
 	for _, change := range networkChanges {
 		if change.From != change.To {
@@ -115,21 +123,6 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 				return err
 			}
 		}
-	}
-	// Always detach the target node's networks before changing its address.
-	current := inv.Nodes[index].Networks
-	inv.Nodes[index].Networks = make(inventory.Networks, len(current))
-	for network, address := range current {
-		inv.Nodes[index].Networks[network] = address
-	}
-	for _, change := range networkChanges {
-		if change.Address == "" {
-			continue
-		}
-		if _, ok := current[change.To]; !ok {
-			return fmt.Errorf("node %q has no address on network %q", oldID, change.To)
-		}
-		inv.Nodes[index].Networks[change.To] = change.Address
 	}
 	inv.Nodes[index].ID = newID
 	// A node's file is named after it, so a renamed node moves to a new file.
@@ -160,6 +153,7 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 		return err
 	}
 
+	inv.ResolveHosts()
 	after, err := derive.Derive(&inv, l.Manifests)
 	if err != nil {
 		return fmt.Errorf("target inventory cannot derive routes: %w", err)
@@ -180,13 +174,14 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 	if oldID != newID {
 		rep.Edits = append(rep.Edits, migrationChangeRow{Kind: "Node ID", Before: oldID, After: newID})
 	}
+	for _, c := range hostChanges {
+		rep.Edits = append(rep.Edits, migrationChangeRow{Kind: "Host " + c.Kind + " " + hostChangeTarget(c), Before: c.From, After: c.To, Refs: []string{inventory.HostSource(before.Host)}})
+	}
 	for _, change := range networkChanges {
 		if change.From != change.To {
 			rep.Edits = append(rep.Edits, migrationChangeRow{Kind: "Network name", Before: change.From, After: change.To, Refs: renamedRefs[change.From]})
 		}
-		if change.Address != "" {
-			rep.Edits = append(rep.Edits, migrationChangeRow{Kind: "Address on " + change.To, Before: before.Networks[change.From], After: change.Address})
-		}
+
 	}
 	renames := map[string]string{}
 	for _, change := range instanceChanges {
@@ -228,8 +223,8 @@ func MigrateSnapshot(in io.Reader, out io.Writer, args []string, flags map[strin
 	}
 	rep.Work = compareMigrationTargets(rep, l, newLoaded, root, s.Secrets, oldID, newID)
 	compareMigrationSecrets(rep, l, newLoaded)
-	migrationDNSReview(rep, l, newLoaded, oldID, newID, oldID != newID || len(networkChanges) != 0, instanceChanges)
-	if err := reportServiceReferences(rep, root, oldID, before, networkChanges, instanceChanges, routeChanges); err != nil {
+	migrationDNSReview(rep, l, newLoaded, oldID, newID, oldID != newID || len(networkChanges) != 0 || len(hostChanges) != 0, instanceChanges)
+	if err := reportServiceReferences(rep, root, oldID, before, networkChanges, instanceChanges, routeChanges, hostChanges); err != nil {
 		return err
 	}
 	rep.Procedure = buildMigrationProcedure(l, newLoaded, oldID, newID, root, s.Secrets, flags, renames)
@@ -268,9 +263,8 @@ func edgeAddress(edge derive.Edge, exists bool) string {
 }
 
 type NetworkChange struct {
-	From    string
-	To      string
-	Address string
+	From string
+	To   string
 }
 
 func parseNodeChange(spec string) (string, string, error) {
@@ -304,17 +298,14 @@ func parseNetworkChanges(encoded string) ([]NetworkChange, error) {
 		fields := map[string]string{}
 		for _, part := range strings.Split(spec, ",") {
 			key, value, ok := strings.Cut(part, "=")
-			if !ok || value == "" || (key != "from" && key != "to" && key != "address") || fields[key] != "" {
-				return nil, fmt.Errorf("--network %q: want from=<old>,to=<new>,address=<new address>", spec)
+			if !ok || value == "" || (key != "from" && key != "to") || fields[key] != "" {
+				return nil, fmt.Errorf("--network %q: want from=<old>,to=<new>", spec)
 			}
 			fields[key] = value
 		}
-		change := NetworkChange{From: fields["from"], To: fields["to"], Address: fields["address"]}
-		if change.From == "" || (change.To == "" && change.Address == "") {
-			return nil, fmt.Errorf("--network %q: give from and at least to or address", spec)
-		}
-		if change.To == "" {
-			change.To = change.From
+		change := NetworkChange{From: fields["from"], To: fields["to"]}
+		if change.From == "" || change.To == "" {
+			return nil, fmt.Errorf("--network %q: give from and to", spec)
 		}
 		if fromSeen[change.From] || toSeen[change.To] {
 			return nil, fmt.Errorf("--network %q: network given more than once", spec)
@@ -362,49 +353,43 @@ func renameInventoryNetwork(inv *inventory.Root, oldName, newName string) ([]str
 		refs = append(refs, "networks.yaml: universal")
 	}
 	if len(inv.Hosts) > 0 {
-		hosts := make(map[string]inventory.Host, len(inv.Hosts))
-		for key, host := range inv.Hosts {
-			if host.Network == oldName {
-				host.Network = newName
-				refs = append(refs, "hosts.yaml: hosts."+key+".network")
+		inv.Hosts = cloneHosts(inv.Hosts)
+		for key, h := range inv.Hosts {
+			if e, ok := h.Endpoints[oldName]; ok {
+				delete(h.Endpoints, oldName)
+				h.Endpoints[newName] = e
+				refs = append(refs, inventory.HostSource(key)+".endpoints."+oldName)
 			}
-			hosts[key] = host
-		}
-		inv.Hosts = hosts
-	}
-	for i := range inv.Nodes {
-		node := &inv.Nodes[i]
-		if address, ok := node.Networks[oldName]; ok {
-			if _, collision := node.Networks[newName]; collision {
-				return nil, fmt.Errorf("%s already names network %q", node.Path, newName)
-			}
-			copied := make(inventory.Networks, len(node.Networks))
-			for name, value := range node.Networks {
-				copied[name] = value
-			}
-			delete(copied, oldName)
-			copied[newName] = address
-			node.Networks = copied
-			if mac, ok := node.MACs[oldName]; ok {
-				macs := make(map[string]string, len(node.MACs))
-				for name, value := range node.MACs {
-					macs[name] = value
+			for name, targets := range h.Names {
+				for i, ref := range targets {
+					if ref.Endpoint == oldName {
+						targets[i].Endpoint = newName
+						refs = append(refs, inventory.HostSource(key)+".names."+name)
+					}
 				}
-				delete(macs, oldName)
-				macs[newName] = mac
-				node.MACs = macs
+				h.Names[name] = targets
 			}
-			refs = append(refs, node.Path+": networks."+oldName)
-		}
-		for j, name := range node.Reaches {
-			if name == oldName {
-				node.Reaches = append([]string(nil), node.Reaches...)
-				node.Reaches[j] = newName
-				refs = append(refs, node.Path+": reaches")
-				break
+			for name, iface := range h.Interfaces {
+				for aid, a := range iface.Addresses {
+					if a.Network == oldName {
+						a.Network = newName
+						iface.Addresses[aid] = a
+						refs = append(refs, inventory.AddressSource(key, name, aid))
+					}
+				}
+				h.Interfaces[name] = iface
 			}
+			for i, network := range h.Reaches {
+				if network == oldName {
+					h.Reaches[i] = newName
+					refs = append(refs, inventory.HostSource(key)+".reaches")
+				}
+			}
+			inv.Hosts[key] = h
 		}
 	}
+
+	inv.ResolveHosts()
 	if len(inv.Users) > 0 {
 		users := make(map[string]inventory.User, len(inv.Users))
 		for key, user := range inv.Users {

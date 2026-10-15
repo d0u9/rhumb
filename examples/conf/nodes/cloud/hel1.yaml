@@ -16,9 +16,6 @@
 # the operator's: dgs renders the configuration and stops there.
 
 id: hel1
-
-networks:
-  internet: hel1.example.net
-
 instances:
   directory: hel1.instances
+host: hel1

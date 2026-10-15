@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/d0u9/rhumb/derive"
 	"github.com/d0u9/rhumb/smbpasswd"
 )
 
@@ -18,6 +19,12 @@ import (
 // docs/export.md#the-template-language names, closing over
 // defaults and the render context in's other fields carry.
 func funcs(defaults map[string]any, in Input) map[string]any {
+	nameRecords := func(network string) ([]Name, error) {
+		if in.NamesError != nil {
+			return nil, in.NamesError
+		}
+		return in.Names[network], nil
+	}
 	return map[string]any{
 		"merge":    mergeFunc,
 		"omit":     omitFunc,
@@ -71,7 +78,7 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 			}
 			return Link{}, fmt.Errorf("link %q: the instance ends no such link", name)
 		},
-		"published":   func(port string) string { return in.Published[port] },
+		"published": func(port string) string { return in.Published[port] },
 		"publishedNames": func(port string) []string {
 			return in.PublishedNames[port]
 		},
@@ -83,7 +90,18 @@ func funcs(defaults map[string]any, in Input) map[string]any {
 			}
 			return d, nil
 		},
-		"names": func(network string) []Name { return in.Names[network] },
+		"names": nameRecords,
+		"flatnames": func(network string) ([]Name, error) {
+			records, err := nameRecords(network)
+			if err != nil {
+				return nil, err
+			}
+			records, issues := derive.FlattenNames(records)
+			if len(issues) > 0 {
+				return nil, fmt.Errorf("flatnames %q: %s", network, strings.Join(issues, "; "))
+			}
+			return records, nil
+		},
 		"target": func() map[string]string {
 			return map[string]string{
 				"service":  in.Target.Service,

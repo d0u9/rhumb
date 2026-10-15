@@ -1,0 +1,53 @@
+# Network facts are independent of deployment. The nas node references this
+# device; the printer and host-a need no deployment node.
+hosts:
+  nas:
+    names:
+      nas.home.test:
+        - {interface: wired, address: home-v4}
+    interfaces:
+      wired:
+        mac: "02:00:00:00:00:11"
+        addresses:
+          home-v4:
+            network: home
+            ip: 10.0.0.10
+            dhcp_reservation: true
+            names: [nas-wired.home.test]
+      wifi:
+        mac: "02:00:00:00:00:12"
+        addresses:
+          home-v4:
+            network: home
+            ip: 10.0.0.11
+            dhcp_reservation: true
+            names: [nas-wifi.home.test]
+    endpoints:
+      home:
+        from: {interface: wired, address: home-v4}
+  printer:
+    interfaces:
+      lan:
+        mac: "02:00:00:00:00:13"
+        addresses:
+          home-v4:
+            network: home
+            ip: 10.0.0.20
+            dhcp_reservation: true
+            names: [printer.home.test]
+  host-a:
+    names:
+      host-a.dev.example.net:
+        - {endpoint: internet}
+    endpoints:
+      internet:
+        address: host-a.example.net
+  # Published services use domain endpoints as CNAME targets in `dns internet`.
+  hel1:
+    endpoints:
+      internet:
+        address: hel1.example.net
+  sea1:
+    endpoints:
+      internet:
+        address: sea1.example.net

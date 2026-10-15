@@ -30,14 +30,14 @@ func TestMigrationApplyWritesTypedFieldsAndIsIdempotent(t *testing.T) {
 	}
 	flags := map[string]string{
 		"apply": "true", "yes": "true", "node": "from=srv,to=srv08",
-		"network": `["from=internet,to=wan,address=203.0.113.8"]`,
-		"route":   `["from=sea,to=sea08"]`,
+		"network": `["from=internet,to=wan"]`, "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
+		"route": `["from=sea,to=sea08"]`,
 	}
 	var out bytes.Buffer
 	if err := Migrate(nil, &out, []string{"node"}, flags, Settings{Root: root, Secrets: secrets}); err != nil {
 		t.Fatalf("apply: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "Applied 4 local inventory file(s)") {
+	if !strings.Contains(out.String(), "Applied 5 local inventory file(s)") {
 		t.Fatalf("output:\n%s", out.String())
 	}
 	inv, err := inventory.Load(root)
@@ -212,8 +212,7 @@ func TestMigrationApplyUpdatesSeparateInstanceFileAndPublishedName(t *testing.T)
 	root, secrets := buildExportableRoot(t)
 	writeFile(t, filepath.Join(root, "nodes", "srv.yaml"), `
 id: srv
-networks:
-  internet: 203.0.113.10
+host: host-a
 instances:
   directory: srv.instances
 `)
@@ -243,17 +242,16 @@ ports:
 
 func TestMigrationApplyRenamesNetworkAcrossNodesAndCredentials(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
-	path := filepath.Join(root, "nodes", "srv.yaml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, path, strings.Replace(string(data), "  internet: 203.0.113.10", "  home: {address: 10.0.1.4, mac: 02:00:00:00:00:04}\n  internet: 203.0.113.10", 1))
+	writeTestHost(t, root, "host-a", inventory.Host{
+		Interfaces: map[string]inventory.Interface{"wired": {MAC: "02:00:00:00:00:04", Addresses: map[string]inventory.InterfaceAddress{"primary": {Network: "home", IP: "10.0.1.4", DHCPReservation: true}}}},
+		Endpoints:  map[string]inventory.Endpoint{"home": {From: &inventory.AddressRef{Interface: "wired", Address: "primary"}}, "internet": {Address: "203.0.113.10"}},
+	})
 	writeFile(t, filepath.Join(root, "nodes", "guest.yaml"), `id: guest
-reaches: [home]
+host: host-guest
 `)
+	writeTestHost(t, root, "host-guest", inventory.Host{Reaches: []string{"home"}})
 	writeFile(t, filepath.Join(root, "networks.yaml"), "networks:\n  - name: home\n    subnet: 10.0.1.0/24\n    gateway: 10.0.1.1\n  - name: internet\nuniversal: internet\n")
-	writeFile(t, filepath.Join(root, "hosts.yaml"), "hosts:\n  printer:\n    network: home\n    address: 10.0.1.9\n    names: [printer.home.test]\n")
+	writeTestHost(t, root, "printer", inventory.Host{Interfaces: map[string]inventory.Interface{"wired": {Addresses: map[string]inventory.InterfaceAddress{"primary": {Network: "home", IP: "10.0.1.9", Names: []string{"printer.home.test"}}}}}})
 	writeFile(t, filepath.Join(root, "users.yaml"), `users:
   friend-a:
     username: yak
@@ -264,9 +262,9 @@ reaches: [home]
         reaches: [home]
 `)
 	var out bytes.Buffer
-	err = Migrate(nil, &out, []string{"node"}, map[string]string{
+	err := Migrate(nil, &out, []string{"node"}, map[string]string{
 		"apply": "true", "yes": "true", "node": "from=srv,to=srv08",
-		"network": `["from=home,to=network-8,address=10.0.1.8"]`,
+		"network": `["from=home,to=network-8"]`, "host-edit": `[{"kind":"ip","interface":"wired","address":"primary","from":"10.0.1.4","to":"10.0.1.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatalf("apply: %v\n%s", err, out.String())
@@ -278,12 +276,12 @@ reaches: [home]
 	if inv.Nodes[0].ID == "" {
 		t.Fatal("missing node")
 	}
-	if inv.NetworkInfo["network-8"].Subnet != "10.0.1.0/24" || inv.Hosts["printer"].Network != "network-8" {
+	if inv.NetworkInfo["network-8"].Subnet != "10.0.1.0/24" || inv.Hosts["printer"].Interfaces["wired"].Addresses["primary"].Network != "network-8" {
 		t.Fatalf("network info or hosts: %+v %+v", inv.NetworkInfo, inv.Hosts)
 	}
 	for _, node := range inv.Nodes {
-		if node.ID == "srv08" && (node.Networks["network-8"] != "10.0.1.8" || node.MACs["network-8"] != "02:00:00:00:00:04") {
-			t.Fatalf("node address: %+v %+v", node.Networks, node.MACs)
+		if node.ID == "srv08" && (node.Networks["network-8"] != "10.0.1.8" || inv.Hosts[node.Host].Interfaces["wired"].MAC != "02:00:00:00:00:04") {
+			t.Fatalf("node address: %+v %+v", node.Networks, inv.Hosts[node.Host].Interfaces)
 		}
 	}
 	if inv.Networks[0] != "network-8" || inv.Users["friend-a"].Credentials["default"].Reaches[0] != "network-8" {
@@ -345,7 +343,7 @@ func TestMigrationApplyRejectsStaleInputAfterConfirmation(t *testing.T) {
 
 func TestMigrationApplyRestoresAfterSecondReplacementFails(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
-	flags := map[string]string{"node": "from=srv,to=srv08", "network": `["from=internet,to=wan,address=203.0.113.8"]`}
+	flags := map[string]string{"node": "from=srv,to=srv08", "network": `["from=internet,to=wan"]`, "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`}
 	var before, after engine.Loaded
 	err := MigrateSnapshot(nil, io.Discard, []string{"node"}, flags, Settings{Root: root, Secrets: secrets}, func(old, next engine.Loaded) bool {
 		before, after = old, next

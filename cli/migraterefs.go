@@ -15,14 +15,17 @@ import (
 // reportServiceReferences finds literal old facts in authored service and
 // node files. These are review candidates: the same string may be a comment,
 // a historical example, or a hostname which intentionally stays unchanged.
-func reportServiceReferences(rep *migrationReport, root, oldID string, oldNode inventory.Node, changes []NetworkChange, instances []instanceChange, routes []routeChange) error {
+func reportServiceReferences(rep *migrationReport, root, oldID string, oldNode inventory.Node, changes []NetworkChange, instances []instanceChange, routes []routeChange, hostChanges []HostChange) error {
 	terms := map[string]bool{oldID: true}
 	for _, change := range changes {
 		if change.From != change.To {
 			terms[change.From] = true
 		}
-		if change.Address != "" && change.Address != oldNode.Networks[change.From] {
-			terms[oldNode.Networks[change.From]] = true
+
+	}
+	for _, change := range hostChanges {
+		if change.Kind == "ip" || change.Kind == "endpoint" {
+			terms[change.From] = true
 		}
 	}
 	delete(terms, "")

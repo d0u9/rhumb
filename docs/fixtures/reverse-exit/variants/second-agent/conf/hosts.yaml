@@ -1,0 +1,1 @@
+hosts: {nce: {endpoints: {internet: {address: nce.example.net}}}, home: {endpoints: {lan: {address: 10.0.0.20}}}}

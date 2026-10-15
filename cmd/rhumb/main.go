@@ -21,6 +21,7 @@ commands:
   export <selector>...         render targets into --to <dir>, --zip <file>, or --to -
   secret sync [--yes]          generate the secrets the inventory implies
   init [dir] [--gitignore]     write the scaffold a generator root starts from
+  dns <network>                print backend-neutral DNS records as JSON
   reservations <network>       print the address reservations a router should hold
   migrate node --node from=<old>,to=<new> [--network ...] [--apply --yes]
                                report, or apply, moving a node's workload to another node
@@ -95,6 +96,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) error {
 		if s.Secrets != "" {
 			flags["secrets"] = s.Secrets
 		}
+	case "dns":
+		action = cli.DNS
 	case "reservations":
 		action = cli.Reservations
 	case "deploy":

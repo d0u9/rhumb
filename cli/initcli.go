@@ -93,12 +93,19 @@ func Init(_ io.Reader, out io.Writer, args []string, flags map[string]string, gl
 func scaffold() map[string]string {
 	return map[string]string{
 		inventory.NetworksFilename:                      networksSkeleton,
+		inventory.HostsFilename:                         hostsSkeleton,
 		inventory.UsersFilename:                         usersSkeleton,
 		inventory.RoutesFilename:                        routesSkeleton,
 		filepath.Join(inventory.NodesDir, "README.md"):  nodesReadme,
 		filepath.Join(confgen.ServicesDir, "README.md"): servicesReadme,
 	}
 }
+
+const hostsSkeleton = `# Device interfaces, addresses and connection endpoints.
+# Nodes bind a device with host: <id>. Network facts belong here.
+# See docs/inventory.md#device-network-inventory.
+hosts: {}
+`
 
 const networksSkeleton = `# The networks nodes belong to, most preferred first. When two nodes share
 # more than one, the address comes from the first of these they both reach.
@@ -158,7 +165,8 @@ routes: {}
 const nodesReadme = `# nodes/
 
 One file per machine or device. Servers and phones are the same kind of thing
-here, which is why the word is "node" rather than "host".
+here. Device network facts can live in hosts.yaml and be referenced by host: <id>.
+Node files do not accept inline networks or reaches.
 
 Files sit one level down, in a directory naming whose machines these are:
 
@@ -172,21 +180,20 @@ A directory naming a user in users.yaml is that person's devices, and fills
 belong to — a provider, a household, a company — and rhumb reads nothing
 further into it. Only one level is read: a directory is a group, never a path.
 
-A server says where it can be reached:
+A server references its host network facts in hosts.yaml:
 
     id: sea1
-    networks:
-      internet: 203.0.113.10
+    host: host-a
     instances:
       - id: ss-sea01
         service: ssserver
         ports:
           users: 38250
 
-A device says only what it can reach, since nothing connects to a phone:
+A device also references its network facts in hosts.yaml:
 
     id: dana-phone
-    reaches: [home]
+    host: host-b
 
 For a node with many instances, the node may instead say:
 

@@ -1615,6 +1615,10 @@ func networkIssues(inv *inventory.Root, nodeByID map[string]inventory.Node, fans
 		add("hosts.yaml will not parse: %s", inv.HostsBroken)
 	}
 
+	if inv.NamesBroken != "" {
+		add("names.yaml will not parse: %s", inv.NamesBroken)
+	}
+
 	// Rule 27: subnet and gateway.
 	prefixes := map[string]netip.Prefix{}
 	for _, name := range inv.Networks {
@@ -1638,33 +1642,22 @@ func networkIssues(inv *inventory.Root, nodeByID map[string]inventory.Node, fans
 		}
 	}
 
-	// Members of every network, nodes and hosts together, for 27 and 28.
-	type member struct{ id, network, address, mac string }
+	out = append(out, hostIssues(inv)...)
+	type member struct{ id, owner, network, address, mac string }
 	var members []member
-	for _, id := range sortedKeys(nodeByID) {
-		n := nodeByID[id]
-		for network, addr := range n.Networks {
-			members = append(members, member{"node " + strconv.Quote(id), network, addr, n.MACs[network]})
+	for _, m := range inv.NetworkMembers() {
+		id := "host " + strconv.Quote(m.Host) + " interface " + strconv.Quote(m.Interface) + " address " + strconv.Quote(m.AddressID)
+		owner := m.Host + "/" + m.Interface
+		if !containsString(inv.Networks, m.Network) && m.Network != inv.Universal {
+			add("%s names network %q, which networks.yaml does not declare", id, m.Network)
 		}
-	}
-	hostIDs := make([]string, 0, len(inv.Hosts))
-	for id := range inv.Hosts {
-		hostIDs = append(hostIDs, id)
-	}
-	sort.Strings(hostIDs)
-	for _, id := range hostIDs {
-		h := inv.Hosts[id]
-		// Rule 29.
-		if !containsString(inv.Networks, h.Network) && h.Network != inv.Universal {
-			add("host %q names network %q, which networks.yaml does not declare", id, h.Network)
+		addr := m.Address
+		if a, err := netip.ParseAddr(addr); err == nil {
+			addr = a.Unmap().String()
+		} else if m.Host != "" {
+			add("%s: address %q is not an IP address", id, addr)
 		}
-		if _, ok := nodeByID[id]; ok {
-			add("host %q is also a node identifier", id)
-		}
-		if _, err := netip.ParseAddr(h.Address); err != nil {
-			add("host %q: address %q is not an IP address", id, h.Address)
-		}
-		members = append(members, member{"host " + strconv.Quote(id), h.Network, h.Address, h.MAC})
+		members = append(members, member{id, owner, m.Network, addr, inventory.NormalizeMAC(m.MAC)})
 	}
 	sort.Slice(members, func(i, j int) bool {
 		if members[i].network != members[j].network {
@@ -1680,7 +1673,6 @@ func networkIssues(inv *inventory.Root, nodeByID map[string]inventory.Node, fans
 				add("%s: address %s on network %q is outside %s", m.id, m.address, m.network, prefix)
 			}
 		}
-		// Rule 28.
 		if prev, ok := addrHeld[[2]string{m.network, m.address}]; ok {
 			add("on network %q, address %s is held by %s and %s", m.network, m.address, prev, m.id)
 		} else {
@@ -1692,10 +1684,10 @@ func networkIssues(inv *inventory.Root, nodeByID map[string]inventory.Node, fans
 		if !validMAC(m.mac) {
 			add("%s: mac %q on network %q is not six colon-separated octets", m.id, m.mac, m.network)
 		}
-		if prev, ok := macHeld[[2]string{m.network, m.mac}]; ok {
-			add("on network %q, mac %s is held by %s and %s", m.network, m.mac, prev, m.id)
+		if prev, ok := macHeld[[2]string{m.network, m.mac}]; ok && prev != m.owner {
+			add("on network %q, mac %s is held by %s and %s", m.network, m.mac, prev, m.owner)
 		} else {
-			macHeld[[2]string{m.network, m.mac}] = m.id
+			macHeld[[2]string{m.network, m.mac}] = m.owner
 		}
 	}
 

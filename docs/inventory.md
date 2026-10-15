@@ -77,8 +77,8 @@ data.
 
 | What | The names |
 | --- | --- |
-| Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `links.yaml`, `networks.yaml`, `hosts.yaml`, `confgen.yaml`, `defaults.yaml` |
-| Node keys | `id`, `networks`, `reaches`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `download`, `containers`, `accounts`, `processes`, `instances` |
+| Files | `services/`, `services/<service>/exports/`, `services/<service>/deploy/`, `nodes/`, `users.yaml`, `routes.yaml`, `links.yaml`, `networks.yaml`, `hosts.yaml`, `names.yaml`, `confgen.yaml`, `defaults.yaml` |
+| Node keys | `id`, `host`, `owner`, `export`, `profiles`, `credential`, `runtime`, `platform`, `download`, `containers`, `accounts`, `processes`, `instances` |
 | Container network keys | `name`, `subnet`, `gateway`, per entry of a node's `containers` |
 | Profile keys | `export`, `values`, `access`, `runs`, `bind`, `ports` |
 | Process keys | `service`, `values`, `deploy`, per entry of a node's `processes` |
@@ -88,8 +88,9 @@ data.
 | Credential keys | `note`, `access`, `reaches` |
 | Route keys | `hops` |
 | Network keys | `networks`, `universal`; per network `name`, `subnet`, `gateway` |
-| Node address keys | `address`, `mac`, when a node's address on a network is written as a mapping |
-| Host keys | `hosts`; per host `network`, `address`, `mac`, `names` |
+| Host keys | `hosts`; per host `interfaces`, `endpoints`, `reaches` |
+| Interface keys | `mac`, `addresses`; named address `network`, `ip`, `dhcp_reservation`, `names` |
+| Endpoint keys | exactly one of `address` or `from`; `from` has `interface`, `address` |
 | Service manifest keys | `secret`, `auth`, `template`, `defaults`, `output`, `rotation`, `self`, `upstream` |
 | Self declaration keys | `set`, `fields`, `kind`, `bytes` |
 | Export manifest keys | `template`, `defaults`, `output`, `upstream` |
@@ -134,7 +135,8 @@ so.
 ├── routes.yaml               chains
 ├── links.yaml                sessions between two instances that routes ride
 ├── networks.yaml             networks, their preference order and address ranges
-└── hosts.yaml                machines on a network that run no instance
+├── hosts.yaml                device interfaces, IPs, names, reservations and endpoints
+└── names.yaml                optional DNS aliases
 
 ~/confgen-secrets/            the secrets root
 ```
@@ -202,30 +204,33 @@ straight into `nodes/` has no group, which is a group of one rather than a
 special case.
 
 ```yaml
+# hosts.yaml
+hosts:
+  u-node-group-09-01:
+    endpoints:
+      internet:
+        address: 203.0.113.10
+---
 # nodes/cloud/u-node-group-09-01.yaml
 
+# nodes/<group>/u-node-group-09-01.yaml
 id: u-node-group-09-01
-
-networks:
-  internet: 203.0.113.10
-
 instances:
   - id: ss-sea01
     service: ssserver
     process: ss-main
     ports:
       users: 38250
-
   - id: ss-sea01-relay
     service: ssserver
     process: ss-main
     ports:
       relays: 49217
-
   - id: hy2-sea01
     service: hysteria2
     ports:
       users: {port: 443, protocol: udp}
+host: u-node-group-09-01
 ```
 
 Instances may live in the node file as above, or in a directory beside it when
@@ -241,12 +246,19 @@ nodes/home/
 ```
 
 ```yaml
+# hosts.yaml
+hosts:
+  home-server:
+    endpoints:
+      home:
+        address: 10.0.1.10
+---
+# nodes/<group>/home-server.yaml
 # nodes/home/server.yaml
 id: home-server
-networks:
-  home: 10.0.1.10
 instances:
   directory: server.instances
+host: home-server
 ```
 
 ```yaml
@@ -273,31 +285,34 @@ home server below answers requests on one instance, relays through a client
 instance beside it, and hosts a service of its own:
 
 ```yaml
+# hosts.yaml
+hosts:
+  home-server:
+    endpoints:
+      home:
+        address: 10.0.1.10
+---
 # nodes/home/server.yaml
 
+# nodes/<group>/home-server.yaml
 id: home-server
-
-networks:
-  home: 10.0.1.10
-
 instances:
   - id: http-home
     service: httpproxy
     bind: "0.0.0.0"
     ports:
       proxy: 8118
-
   - id: ss-home
     service: ssserver
     bind: 127.0.0.1
     ports:
       local: 1080
-
   - id: bin-home
     service: microbin
     bind: "0.0.0.0"
     ports:
       web: 8080
+host: home-server
 ```
 
 It has no address on `internet`, and does not need one: it reaches out through
@@ -308,10 +323,17 @@ be reached, not where it can reach — see
 A node hosting no services needs only two lines:
 
 ```yaml
+# hosts.yaml
+hosts:
+  dana-macbook:
+    reaches:
+      - home
+---
 # nodes/dana/macbook.yaml
 
+# nodes/<group>/dana-macbook.yaml
 id: dana-macbook
-reaches: [home]
+host: dana-macbook
 ```
 
 `owner` is the group, so it is not written. A node kept somewhere else may name
@@ -325,6 +347,10 @@ same one hold one secret between them.
 A device has no `networks` at all: nothing connects *to* a phone, so it has no
 address to advertise. `reaches` is how it says it can use the home network when
 it is there.
+
+Device network facts live in [device network inventory](#device-network-inventory).
+A node writes `host: <id>` to bind them explicitly. Node `networks` and `reaches`
+are computed values for algorithms/templates, not accepted YAML fields.
 
 ### Networks and how an address is chosen
 
@@ -347,7 +373,7 @@ nothing is implicit and every node states what it reaches.
 `gateway` the router's address inside it. Both are optional, and both are
 written only for a network someone administers: the internet has no subnet
 worth checking. A network with a `subnet` has every literal address on it —
-a node's and a [host's](#hosts) — checked to fall inside it, and every address
+a [host interface's](#device-network-inventory) — checked to fall inside it, and every address
 on it checked to be written once. Nothing is inferred from the prefix: rhumb
 does not pick addresses, and a network without one is the same network,
 unchecked.
@@ -367,18 +393,18 @@ by `universal` naming it rather than by the renderer recognising a word.
 A node says two different things about networks, and NAT is why they cannot be
 one field:
 
-- **`networks`** maps a network to this node's address on it. It says where
+- **Host `endpoints`** maps a network to this node's connection target. It says where
   others can reach this node.
-- **`reaches`** lists networks this node can open a connection on. It says
+- **Host `reaches`** lists additional networks this node can open a connection on. It says
   nothing about being reachable.
 
-A node reaches every network it has an address on, and every node reaches the
+A node reaches every network it has an endpoint on, and every node reaches the
 `universal` network, so `reaches` is written only for a network a node can use
 but has no address on: a phone on the home LAN, or a laptop there. A home server
 behind NAT writes neither — its `home` address covers the LAN, and the universal
 network is implicit.
 
-`networks` is where others reach this node, which is not always what its own
+Host `endpoints` is where others reach this node, which is not always what its own
 interfaces hold. A machine published through a forwarded port writes the address
 others dial, not the private one it is configured with; the field answers "where
 do I send a packet for this node", and a reader copying an interface address into
@@ -388,10 +414,18 @@ A node sitting on two networks writes both, and that is the whole of an edge
 host in front of a private subnet:
 
 ```yaml
+# hosts.yaml
+hosts:
+  edge-fra:
+    endpoints:
+      backend:
+        address: 10.0.0.1
+      internet:
+        address: 203.0.113.40
+---
+# nodes/<group>/edge-fra.yaml
 id: edge-fra
-networks:
-  internet: 203.0.113.40
-  backend: 10.0.0.1
+host: edge-fra
 ```
 
 Backends on that subnet have a `backend` address and no `internet` one. They
@@ -424,7 +458,8 @@ server to be reachable and the client only to be able to reach; requiring both
 to be addressable would rule out every machine behind NAT, which is most of
 them.
 
-A machine changing address is one line in one node file.
+A machine changing address edits its named interface IP or literal host endpoint. References follow named IP edits;
+changing an endpoint selection does not change either interface IP.
 
 ### A node's accounts
 
@@ -441,81 +476,112 @@ template reads them as `(node).accounts.<name>` — `name`, `uid`, `gid`,
 `group` — and an instance names an account rather than repeating its
 numbers: a file on a volume keeps the number, so it is written once.
 
-### A node's hardware address
-
-An address in `networks` may be written as a mapping when the network hands
-addresses out by hardware address:
-
-```yaml
-networks:
-  home: {address: 10.0.30.10, mac: "02:00:00:00:00:11"}
-```
-
-`mac` is read for two things only: [the reservation table](#what-the-router-is-given)
-and the check that no two members of a network share one. It never affects
-which address a hop resolves to. It is written lower case with colons, and
-rhumb normalises what it reads to that, so a value copied from a router's
-upper-case table is the same value.
-
-A mobile device is not a special case, because "at home" and "away" are not two
-addresses for one route — they are two routes. A phone at home reaches the
-internet through the home server; away, it reaches a server directly. Those are
-different chains, the person picks one in their client, and each renders its own
-configuration. The model states which chains exist; which one to use at a given
-moment is a decision no file can make.
-
 ## Hosts
 
-Some machines on a network run nothing this inventory deploys — a NAS with its
-own firmware, a printer, a virtual machine someone uses as a desktop — and are
-still named, reserved an address and dialled. They are hosts, and they live in
-one file:
+`hosts.yaml` owns device interfaces, named IPs, DHCP reservation intent, device
+names and connection endpoints. Deployment nodes reference hosts explicitly;
+non-deployed devices use the same model. There is one format and no conversion
+or historical-compatibility reader.
+
+## Device network inventory
+
+`hosts.yaml` separates actual interface addresses from connection targets. A host
+can have many interfaces/MACs and each interface can have many named IPs. A host
+needs no deployment node, and a domain-only endpoint needs no invented interface.
 
 ```yaml
-# hosts.yaml
-
 hosts:
-  nas:
-    network: home
-    address: 10.0.30.11
-    mac: "02:00:00:00:00:12"
-    names: [nas.example.com]
-  printer:
-    network: home
-    address: 10.0.30.12
-    mac: "02:00:00:00:00:13"
-    names: [printer.example.com]
-  desk-vm:
-    network: home
-    address: 10.0.31.31
-    mac: "02:00:00:00:00:14"
+  host-a:
+    interfaces:
+      wired:
+        mac: "02:00:00:00:00:11"
+        addresses:
+          home-v4:
+            network: home
+            ip: 10.0.0.10
+            dhcp_reservation: true
+            names: [host-a.home.test]
+          extra-v4:
+            network: home
+            ip: 10.0.0.12
+      wifi:
+        mac: "02:00:00:00:00:12"
+        addresses:
+          home-v4:
+            network: home
+            ip: 10.0.0.11
+            dhcp_reservation: true
+    endpoints:
+      home:
+        from: {interface: wired, address: home-v4}
+      internet:
+        address: host-a.example.net
+    reaches: [backend]
 ```
 
-A host is not a node. It has no instances, no owner, no `reaches`, and no
-route may name it: nothing here renders a file for it, and the one thing it
-takes part in is being found. Anything that grows an instance becomes a node
-file, and its entry here is deleted rather than kept beside it.
+`home`, `internet` and `backend` must be declared networks. A deployment node
+writes `id: node-1` and `host: host-a`, with no inline `networks` or `reaches`.
+Binding is explicit and one-to-one; matching identifiers alone do not bind.
+Runtime, ownership, accounts, containers, profiles and instances stay on the node.
 
-`names` is the DNS names the host answers to on that network, as bare
-hostnames, and may be empty: a machine with a reservation and no name is
-ordinary. `mac` is optional too, for a host whose address is fixed on the host
-itself. The key is the host's identifier, for a template or another file to
-refer to; it need not match anything the router calls it.
+| Field | Meaning and default |
+| --- | --- |
+| `interfaces` | Map of local stable interface identifiers; empty by default |
+| `interfaces.<id>.mac` | Optional MAC, normalized to lower-case colon form; empty by default |
+| `interfaces.<id>.addresses` | Named interface IP declarations; empty by default |
+| `addresses.<id>.network` | Required declared network scope |
+| `addresses.<id>.ip` | Required unscoped literal IP; not a domain |
+| `addresses.<id>.dhcp_reservation` | Explicit MAC–IPv4 reservation; false by default |
+| `addresses.<id>.names` | Interface DNS names for this IP; first name is the device CNAME target; empty by default |
+| `names` | Device DNS name → local `{interface, address}` or `{endpoint}` references; empty by default |
+| `endpoints` | One explicit connection target per network scope; empty by default |
+| `endpoints.<network>.from` | Reference to this host's `interface` and named `address` |
+| `endpoints.<network>.address` | Literal unscoped IP or bare ASCII DNS hostname, including an optional trailing dot |
+| `reaches` | Additional outbound scopes; empty by default |
 
-Everything a host says is checked against its network: the address falls in
-the network's `subnet`, no other host or node holds it, no other member has
-the same `mac`, and no name is claimed twice — see
-[names on a network](#names-on-a-network).
+Host, interface and address keys start with an ASCII letter/digit and continue
+with letters, digits, hyphens or underscores. They are inventory identities, not
+OS names. Inventory YAML must contain exactly one mapping document; null roots,
+extra documents, unknown keys, removed fields and null record mappings are
+rejected. YAML merges are checked after applying explicit-key and first-merge
+precedence, including root-level merges. An endpoint has exactly one of `from` and literal `address`. A reference
+must resolve in the same host and network. Endpoints cannot reference endpoints.
 
-### What the router is given
+Actual interface IPs are owned once per network. A MAC is counted once per
+participating interface/network, regardless of the number of its IPs. Different
+interfaces claiming the same MAC in that scope conflict. One MAC/network can
+reserve at most one IPv4; additional static IPs remain valid. A MAC-only interface
+creates no reservation. Reservation rows always identify `host/interface/address`,
+independently of node identity or the number of interfaces. IPv6 literals do not enable DHCPv6, and existing subnet
+and DNS conflict behavior is retained rather than promising full dual stack.
 
-A network whose router hands out addresses keeps its reservations in the
-router, where rhumb cannot write. What rhumb can do is say what they should
-be: an export listing, for one network, every node and host with a `mac`,
-its address and its identifier, in address order. It is copied into the
-router by hand, and a diff of it against the router's own table is the check
-that the two agree. `rhumb reservations <network>` prints it, one line
-per member: address, `mac`, identifier.
+A referenced IP change affects its endpoint, device DNS and reservation. Switching
+an endpoint reference leaves both interface IPs unchanged. Interfaces do not
+publish endpoints or add outbound scopes implicitly. Effective connectivity
+continues to use endpoints, explicit `reaches`, `universal` and network priority.
+Public endpoints are not local IP ownership claims or proof of a local bind IP.
+Existing listener/container-publication behavior is unchanged.
+
+Interface names generate IP records; device names reference those names. No host identifier becomes
+a DNS name automatically. Service `ports.published` remains with services and
+retains proxy-ingress derivation. Domain endpoints are used for dialing and as
+external CNAME targets for published service names; they are never resolved
+during loading. An endpoint alone generates no DNS record.
+The existing DNS table still rejects one name reaching different addresses in
+one scope; no DNS balancing, PTR or general RRsets are added.
+
+### Existing machine moves
+
+The dgs Migrate page continues to edit current Host fields for machine moves.
+Interface-IP, MAC, literal endpoint and endpoint-selection edits are separate
+intents. It does not convert configuration formats. Plans record the source host
+in one current schema; there is no older-plan adapter.
+
+Reviewed reports retain an input digest. Changed host/service/network inputs
+refuse application. Replacement YAML loads and validates in a temporary tree
+before application; existing originals are backed up and restored on handled
+failure. This is not multi-file crash atomicity and applies no real DHCP, DNS,
+OS networking or deployment changes.
 
 ## Instances and ports
 
@@ -1117,34 +1183,154 @@ it writing `deploy` is an error rather than a mapping nothing reads.
 
 ### Names on a network
 
-A name is written once, where the thing answering to it is: a port's
-`published`, or a host's `names`. What a resolver on a network needs is the
-other direction — every name, and the address that answers it on that
-network — and that is derived:
+DNS has three authored layers. Interface names belong to an address; device
+names reference those addresses; service names remain on `ports.published`.
+No name is inferred from a host or node identifier.
 
-| The name comes from | It resolves to |
-| --- | --- |
-| A port's `published`, entered directly | The port's node's address on the network |
-| A port's `published`, fronted by a proxy | The address of the node of the route's first hop |
+```yaml
+# hosts.yaml (networks home and lab declared in networks.yaml)
+hosts:
+  host-a:
+    names:
+      host-a.dev.example.com:
+        - {interface: en, address: home-v4}
+        - {interface: en2, address: lab-v4}
+    interfaces:
+      en:
+        addresses:
+          home-v4: {network: home, ip: 10.0.0.10, names: [host-a-en.dev.example.com]}
+      en2:
+        addresses:
+          lab-v4: {network: lab, ip: 10.1.0.10, names: [host-a-en2.dev.example.com]}
+    endpoints:
+      home: {from: {interface: en, address: home-v4}}
+      lab: {from: {interface: en2, address: lab-v4}}
+```
 
-"Fronted" means the route's first hop is a service with `downstreams: many`
-that dispatches by name: a relay forwards bytes and answers to no name, so a
-route entering through one leaves the name where it was. An address written
-as a hostname is not an entry — a resolver's record wants an IP address.
-| A host's `names` | The host's `address` |
+A device name has at least one reference, all inside this host, with at most
+one reference per network. A reference selects either `{interface, address}`
+or `{endpoint: <network>}`, never both. An interface reference has the **first** name on that
+address as its CNAME target; a missing reference or an address without names is an error. The
+network comes from the address, not another field.
 
-A name resolves on a network only where its node has an address there; a
-name whose node is on the internet alone is absent from `home`'s table
-rather than pointed at a public address.
+A service name becomes a CNAME to the device name whose reference selects
+that network endpoint, or equals its node's `endpoint.from` in that network. More than one matching device name is
+an error. Without a match it points directly to the endpoint: A/AAAA for an IP, CNAME
+for a domain. A name fronted
+by a route's first hop uses that proxy's host instead; existing proxy selection
+is unchanged. A hostname endpoint makes published names CNAMEs to that external hostname.
+The hostname is an explicitly declared terminal; rhumb never queries it.
 
-A template reads the table with `names "<network>"`, a list of `Name`,
-`Address` pairs in name order. A DNS server rendering its local records is
-the case it exists for, and it is why a proxy site or a host added to the
-inventory needs no second edit: the resolver's records follow.
+The resulting home table can be:
 
-The same name reaching two addresses on one network is an error naming both
-sources. That is rule 18's one-machine rule seen from the resolver's side,
-extended to hosts.
+```text
+server.example.com          CNAME host-a.dev.example.com
+host-a.dev.example.com      CNAME host-a-en.dev.example.com
+host-a-en.dev.example.com   A     10.0.0.10
+```
+
+Optional generator-root `names.yaml` adds aliases without network fields:
+
+```yaml
+names:
+  nas.example.com: host-a.dev.example.com
+  files.example.com: nas.example.com
+```
+
+An alias is included on every network containing its target, including through
+other aliases. A target absent from every network is an error. These aliases
+apply to physical network tables, not node-local container tables.
+
+`names "<network>"` returns records sorted by name, each with `Name`, `Type`,
+`Value`, and `Source`. `Type` is `A`, `AAAA` for IPv6, or `CNAME`; `Value` is the
+IP or target name. `flatnames "<network>"` follows CNAMEs and returns the same
+names and sources with terminal IP records, for hosts-only backends. It fails
+without returning a partial table if resolution fails. Neither function makes
+DNS requests or writes a DNS server. Both template functions propagate authored
+DNS parse and derivation errors before any rendered bytes are returned.
+Templates that do not read DNS tables can still render independently.
+
+Rule 30 rejects duplicate names on a network (including A/CNAME conflicts and
+hand aliases colliding with interface, device or published names), missing
+same-network targets (except explicitly authored external endpoints), cycles, and chains exceeding **8 CNAME hops**. Names are
+ASCII host names, compared case-insensitively with a final dot ignored. Sources
+identify the authored fields in diagnostics. A device-name edit changes its
+CNAME without changing interface IP ownership or DHCP reservations.
+
+A public device can have a stable device name without inventing a local interface:
+
+```yaml
+hosts:
+  host-a:
+    names:
+      host-a.dev.example.com:
+        - {endpoint: internet}
+    endpoints:
+      internet: {address: origin.example.net}
+```
+
+Published service names select this device name on `internet`, giving
+`service.example.com → host-a.dev.example.com → origin.example.net`.
+The endpoint is still the one authored access address. A literal IPv4/IPv6
+endpoint gives the device name an A/AAAA record instead. An endpoint referencing
+a local named address retains that address's interface-name CNAME; without an
+interface name it uses the resolved IP. Missing endpoints, mixed reference
+forms and multiple references in one scope are errors. Network renames update
+these endpoint references along with endpoint keys.
+
+### Exporting records for an external DNS tool
+
+The machine's access address can be an IP or a domain; it does not imply control
+of that domain. Published names come from the services on the machine:
+
+```yaml
+# hosts.yaml
+hosts:
+  host-a:
+    endpoints:
+      internet: {address: origin.example.net}
+# nodes/node-1.yaml (separate file)
+# id: node-1
+# host: host-a
+# instances:
+#   - id: web
+#     service: example
+#     ports:
+#       main: {port: 443, published: [web.example.com, files.example.com]}
+```
+
+Both names become CNAMEs to `origin.example.net`. Multiple published ports
+requesting the same name and target produce one record with a deterministic
+source. Repeating a name within one port remains an error. A published name
+equal to the canonical domain endpoint requests no new record: that existing
+access name must not become a self-CNAME. With `203.0.113.10` as the
+endpoint they become A records; with `2001:db8::10`, AAAA. No interface or MAC
+is required for an access endpoint. Existing proxy selection still determines
+which machine answers a published service name.
+
+`rhumb --root <root> dns internet` writes deterministic JSON to stdout:
+
+```json
+{
+  "network": "internet",
+  "records": [
+    {"name": "files.example.com", "type": "CNAME", "value": "origin.example.net", "source": "node-1/web:main"},
+    {"name": "web.example.com", "type": "CNAME", "value": "origin.example.net", "source": "node-1/web:main"}
+  ]
+}
+```
+
+Invalid inventory emits no JSON; a declared network with no records emits an
+empty array. An external CNAME terminal is allowed only when derived from an
+explicit machine endpoint. Aliases in `names.yaml` still need a target in an
+authored network table, so typos cannot silently become external records.
+Targets present in the local table are followed and checked for cycles even
+when also used as an endpoint. `flatnames` refuses chains terminating outside
+the inventory because their IP cannot be known without querying DNS.
+
+A Cloudflare, BIND or other tool may consume these generic records. TTL, proxy
+flags, provider credentials, zone ownership and synchronization policy belong
+to that tool; rhumb neither calls providers nor performs DNS lookups.
 
 **A container network has a table too, on its own node.** A name enters it
 when the instance answering to the name — the proxy in front of the port, or
@@ -1799,16 +1985,22 @@ A derived instance is a default, not a fixed result. Authoring an instance with
 the same identifier pins what it names and leaves the rest derived:
 
 ```yaml
+# hosts.yaml
+hosts:
+  dana-phone:
+    reaches:
+      - home
+---
 # nodes/dana/phone.yaml
 
+# nodes/<group>/dana-phone.yaml
 id: dana-phone
-reaches: [home]
-
 instances:
   - id: dana-phone-sea-ssserver-json
     ports:
       socks: 10080
       http: 18080
+host: dana-phone
 ```
 
 Everything not written stays derived: the export, `bind`, and every value the
@@ -2483,11 +2675,12 @@ dials:       the instance's declared dependencies, by name, each resolved as a
              downstreams entry is: instance, port, number, address, and the
              published name when it has one. Read with dial "<name>"; a name
              not declared is a render error
-names:       for a network, every name resolving on it and its address there:
+names:       for a network, DNS records with Name, Type, Value and Source:
              ports' published names at their entrance node, and hosts'
              names; for a container network of the rendering node, the names
              whose answering instance holds a fixed address on it. Read with
-             names "<network>", in name order
+             names "<network>", in name order. flatnames "<network>" follows
+             CNAME chains to IP records
 publishedNames: every name one of the instance's own ports is published at,
              where published alone gives the first. Read with
              publishedNames "<port>"
@@ -2609,16 +2802,22 @@ failing can be told which level it was reading.
     satisfy this. The errors name the instance, principal and, for a missing
     grant, route.
 27. Each network's `subnet`, when written, is a CIDR prefix, and its `gateway`
-    an address inside it. Every literal address a node or host holds on that
-    network falls inside the prefix; an address written as a hostname is not
-    checked.
-28. On one network, no address is held twice and no `mac` is held twice,
-    nodes and hosts counted together. A `mac` is six colon-separated octets.
-29. Every host names an existing network, and its identifier is not also a
-    node identifier.
-30. On one network, and on one node's container network, a name resolves to
-    one address. The sources are ports' `published` names and hosts'
-    `names`; the error names both.
+    an address inside it. Every owned interface address on that network falls inside the prefix;
+    endpoint references and literals are not another ownership declaration.
+28. On one network, no IP is owned by two address declarations and no MAC
+    by two host interfaces. Multiple IPs on one interface share its MAC.
+    A MAC is six colon-separated octets; explicit DHCP reservations require
+    a MAC and at most one IPv4 per MAC/network.
+29. Host addresses, endpoints and reaches name declared networks. Device
+    bindings and local interface/address references must exist; one host binds
+    at most one node. Inventory identifiers never infer DNS names.
+30. On one network, and on one node's container network, a DNS name has one
+    record. Interface names, device references, published names and optional
+    aliases form a same-network graph with explicit external endpoint terminals:
+    no missing internal targets, cycles or chains
+    beyond 8 CNAME hops. Device names reference at most one address per network;
+    references must exist and the address must have names. Conflicts name both
+    sources. See [names on a network](#names-on-a-network).
 31. Every `dials` value names an existing instance and an existing port on
     it, not the dialling instance itself, and the two ends resolve an address
     as rule 10 requires of an edge.

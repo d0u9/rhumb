@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -36,6 +37,9 @@ func migrateApplyAction(in io.Reader, out io.Writer, args []string, flags map[st
 	inputs, err := migrationInputDigests(root)
 	if err != nil {
 		return err
+	}
+	if expected := flags["expected-inputs"]; expected != "" && expected != migrationDigest(inputs) {
+		return fmt.Errorf("migration plan is stale: inventory or service files changed after preview")
 	}
 	var before, after engine.Loaded
 	var report bytes.Buffer
@@ -152,7 +156,7 @@ func migrateApplyAction(in io.Reader, out io.Writer, args []string, flags map[st
 
 func migrationInputDigests(root string) (map[string][32]byte, error) {
 	paths := map[string]bool{}
-	for _, name := range []string{inventory.UsersFilename, inventory.RoutesFilename, inventory.NetworksFilename} {
+	for _, name := range []string{inventory.UsersFilename, inventory.RoutesFilename, inventory.NetworksFilename, inventory.HostsFilename, inventory.NamesFilename, inventory.LinksFilename} {
 		paths[name] = true
 	}
 	for _, subtree := range []string{"nodes", "services"} {
@@ -191,6 +195,20 @@ func migrationInputDigests(root string) (map[string][32]byte, error) {
 	return digests, nil
 }
 
+// MigrationInputDigest binds an embedding UI's reviewed report to its inputs.
+func MigrationInputDigest(root string) (string, error) {
+	inputs, err := migrationInputDigests(root)
+	if err != nil {
+		return "", err
+	}
+	return migrationDigest(inputs), nil
+}
+
+func migrationDigest(inputs map[string][32]byte) string {
+	data, _ := json.Marshal(inputs) // String keys and byte arrays always encode.
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
 func checkMigrationInputDigests(root string, expected map[string][32]byte) error {
 	current, err := migrationInputDigests(root)
 	if err != nil {
@@ -205,6 +223,9 @@ func checkMigrationInputDigests(root string, expected map[string][32]byte) error
 func applyMigrationEdits(root string, edits []migrationEdit, expected engine.Loaded, replace func(string, string) error) (string, error) {
 	if len(edits) == 0 {
 		return "", nil
+	}
+	if err := validateStagedMigration(root, edits, expected); err != nil {
+		return "", err
 	}
 	for _, edit := range edits {
 		if err := checkMigrationEdit(root, edit); err != nil {
@@ -283,6 +304,7 @@ func applyMigrationEdits(root string, edits []migrationEdit, expected engine.Loa
 		if err := replace(staged[edit.path], filepath.Join(root, dest)); err != nil {
 			return rollback(fmt.Errorf("replacing %s: %w", edit.path, err))
 		}
+
 		if edit.moveTo != "" {
 			if err := os.Remove(filepath.Join(root, edit.path)); err != nil {
 				applied = append(applied, edit)
@@ -302,13 +324,10 @@ func applyMigrationEdits(root string, edits []migrationEdit, expected engine.Loa
 	if issues := validate.Validate(actual.Inv, actual.Manifests, actual.Exports, actual.Derived, nil); len(issues) != 0 {
 		return rollback(fmt.Errorf("applied inventory has %d validation problems: %s", len(issues), issues[0].Message))
 	}
-	if !reflect.DeepEqual(actual.Inv.Nodes, expected.Inv.Nodes) ||
-		!migrationUserReferencesEqual(actual.Inv.Users, expected.Inv.Users) ||
-		!reflect.DeepEqual(actual.Inv.Routes, expected.Inv.Routes) ||
-		!reflect.DeepEqual(actual.Inv.Networks, expected.Inv.Networks) ||
-		actual.Inv.Universal != expected.Inv.Universal {
+	if !migrationInventoryEqual(actual.Inv, expected.Inv) {
 		return rollback(fmt.Errorf("applied inventory differs from the validated plan"))
 	}
+
 	return backupDir, nil
 }
 
@@ -334,6 +353,7 @@ func migrationUserReferencesEqual(actual, expected map[string]inventory.User) bo
 func checkMigrationEdit(root string, edit migrationEdit) error {
 	path := filepath.Join(root, edit.path)
 	info, err := os.Lstat(path)
+
 	if err != nil {
 		return err
 	}
@@ -395,7 +415,11 @@ func migrationAlreadyApplied(root string, flags map[string]string) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	if oldID == newID && len(networks)+len(instances)+len(routes)+len(published) == 0 {
+	hostChanges, err := parseHostChanges(flags["host-edit"])
+	if err != nil {
+		return false, err
+	}
+	if oldID == newID && len(networks)+len(instances)+len(routes)+len(published)+len(hostChanges) == 0 {
 		return false, nil
 	}
 	l, err := engine.Load(root)
@@ -421,13 +445,35 @@ func migrationAlreadyApplied(root string, flags map[string]string) (bool, error)
 	if node == nil || oldID != newID && oldPresent {
 		return false, nil
 	}
+	if len(hostChanges) != 0 && node.Host == "" {
+		return false, nil
+	}
+	for _, c := range hostChanges {
+		for _, change := range networks {
+			if c.Network == change.From {
+				c.Network = change.To
+			}
+		}
+		value, err := HostChangeValue(l.Inv.Hosts[node.Host], c)
+		if err != nil {
+			// Missing target fields mean the plan still needs its normal validation.
+			return false, nil
+		}
+		want := c.To
+		if c.Kind == "mac" && want != "(none)" {
+			want = inventory.NormalizeMAC(want)
+		}
+		if value != want {
+			return false, nil
+		}
+	}
 	for _, change := range networks {
 		name := change.To
 		if name == "" {
 			name = change.From
 		}
-		address, ok := node.Networks[name]
-		if !ok || change.Address != "" && change.Address != address {
+		ok := migrationNodeNetworks(l.Inv, *node)[name]
+		if !ok {
 			return false, nil
 		}
 		if change.From != name {

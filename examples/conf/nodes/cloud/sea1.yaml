@@ -10,12 +10,7 @@
 # answer reads top to bottom.
 
 id: sea1
-
-networks:
-  internet: sea1.example.net
-
 instances:
-
   # Shadowsocks. One process, two ports, two account tables that know nothing
   # of each other. A port name says who comes in through it, because the port
   # is the unit an account table belongs to: whoever holds `users` cannot use
@@ -35,7 +30,6 @@ instances:
         self: [psk.relays]
     self:
       psk: [users, relays]
-
   # Hysteria2. A different program, so a different instance — not a second
   # port of the one above. One process, one listening port, one account table.
   - id: hy2-sea01
@@ -59,7 +53,6 @@ instances:
       # proxy in front needs a name it serves or the prober gets the default
       # site instead of the masquerade.
       masquerade_url: https://www.example.com/
-
   # Caddy: the entrance for every site on this machine, with MicroBin behind
   # it.
   #
@@ -79,7 +72,6 @@ instances:
       sites:
         paste:
           max_body: 128MB
-
       # Static sites: a set of names sharing one root.
       static:
         - names:
@@ -87,10 +79,8 @@ instances:
             - example.com
           root: /srv/www/example/current
           log: example-sites
-
       # The root an HTTP request that matched no site name falls back to.
       default_root: /srv/www/placeholder/current
-
   # MicroBin. It runs in a container, with the proxy in front. A port's
   # `published` is the name this service answers to — the proxy matches its
   # site block on it, and MicroBin writes the same string into
@@ -134,3 +124,4 @@ instances:
     # server.env carries those.
     deploy:
       dir: /srv/microbin-sea01
+host: sea1

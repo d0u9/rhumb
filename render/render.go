@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/d0u9/rhumb/confgen"
+	"github.com/d0u9/rhumb/derive"
 )
 
 // Target names what is being rendered, for error messages and for the
@@ -106,10 +107,7 @@ type Downstream struct {
 }
 
 // Name is one entry of a network's name table.
-type Name struct {
-	Name    string
-	Address string
-}
+type Name = derive.Name
 
 // Mapping is where a container runtime publishes one of this instance's
 // ports on the machine it runs on: the addresses it binds, and the number,
@@ -191,6 +189,8 @@ type Input struct {
 	// Names is every network's name table, by network, read with
 	// names "<network>".
 	Names map[string][]Name
+	// NamesError is reported only when a template reads names or flatnames.
+	NamesError error
 	// Members is, for a process, each instance it runs, in ID order, with
 	// what that instance would have been given on its own. Empty for every
 	// other instance. See docs/inventory.md#processes.

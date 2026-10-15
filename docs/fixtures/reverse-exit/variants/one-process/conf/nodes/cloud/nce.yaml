@@ -1,7 +1,5 @@
 # Changed: the relay is two instances, one per mode, run by one program.
 id: nce
-networks:
-  internet: nce.example.net
 processes:
   xray-nce:
     service: xray
@@ -23,3 +21,4 @@ instances:
       sea:
         port: 40002
         published: nce.example.net
+host: nce

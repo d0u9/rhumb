@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/d0u9/rhumb/inventory"
+	"gopkg.in/yaml.v3"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -37,8 +40,7 @@ output: config.json
 `)
 	writeFile(t, filepath.Join(dir, "nodes", "srv.yaml"), `
 id: srv
-networks:
-  internet: 203.0.113.10
+host: host-a
 instances:
   - id: ss-srv
     service: ssserver
@@ -48,6 +50,7 @@ instances:
 `)
 	writeFile(t, filepath.Join(dir, "nodes", "laptop.yaml"), `
 id: laptop
+host: host-b
 owner: dana
 `)
 	writeFile(t, filepath.Join(dir, "nodes", "bad.yaml"), "id: [unterminated\n")
@@ -68,6 +71,8 @@ routes:
 networks: [{name: internet}]
 universal: internet
 `)
+	writeTestHost(t, dir, "host-a", inventory.Host{Endpoints: map[string]inventory.Endpoint{"internet": {Address: "203.0.113.10"}}})
+	writeTestHost(t, dir, "host-b", inventory.Host{})
 	return dir
 }
 
@@ -85,8 +90,7 @@ auth: per-principal
 	writeFile(t, filepath.Join(root, "services", "hysteria2", "defaults.yaml"), "listen: :443\n")
 	writeFile(t, filepath.Join(root, "nodes", "srv.yaml"), `
 id: srv
-networks:
-  internet: 203.0.113.10
+host: host-a
 instances:
   - id: u-node-group-09
     service: hysteria2
@@ -94,6 +98,7 @@ instances:
       main: 443
 `)
 
+	writeTestHost(t, root, "host-a", inventory.Host{Endpoints: map[string]inventory.Endpoint{"internet": {Address: "203.0.113.10"}}})
 	secretsDir = t.TempDir()
 	return root, secretsDir
 }
@@ -123,8 +128,7 @@ upstream:
 	writeFile(t, filepath.Join(root, "services", "ssserver", "exports", "ss-json", "defaults.yaml"), "{}\n")
 	writeFile(t, filepath.Join(root, "nodes", "srv.yaml"), `
 id: srv
-networks:
-  internet: 203.0.113.10
+host: host-a
 instances:
   - id: ss-srv
     service: ssserver
@@ -133,6 +137,7 @@ instances:
 `)
 	writeFile(t, filepath.Join(root, "nodes", "laptop.yaml"), `
 id: laptop
+host: host-b
 owner: dana
 `)
 	writeFile(t, filepath.Join(root, "users.yaml"), `
@@ -150,7 +155,36 @@ networks: [{name: internet}]
 universal: internet
 `)
 
+	writeTestHost(t, root, "host-a", inventory.Host{Endpoints: map[string]inventory.Endpoint{"internet": {Address: "203.0.113.10"}}})
+	writeTestHost(t, root, "host-b", inventory.Host{})
 	secretsDir = t.TempDir()
 	writeFile(t, filepath.Join(secretsDir, "srv/ss-srv", "main", "dana", "default"), "user-psk")
 	return root, secretsDir
+}
+
+// writeTestHost updates explicit host declarations without adapting node YAML.
+func writeTestHost(t *testing.T, root, id string, host inventory.Host) {
+	t.Helper()
+	path := filepath.Join(root, inventory.HostsFilename)
+	doc := struct {
+		Hosts map[string]inventory.Host `yaml:"hosts"`
+	}{}
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if err == nil {
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if doc.Hosts == nil {
+		doc.Hosts = map[string]inventory.Host{}
+	}
+	doc.Hosts[id] = host
+	data, err = yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, path, string(data))
 }

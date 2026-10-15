@@ -24,8 +24,7 @@ func TestLoad_ParsesNodesUsersRoutesAndNetworks(t *testing.T) {
 	writeFile(t, filepath.Join(root, NodesDir, "u-node-group-09-01.yaml"), `
 id: u-node-group-09-01
 
-networks:
-  internet: 203.0.113.10
+host: host-a
 
 instances:
   - id: ss-sea01
@@ -38,7 +37,7 @@ instances:
 	writeFile(t, filepath.Join(root, NodesDir, "macbook.yaml"), `
 id: macbook
 owner: dana
-reaches: [home]
+host: host-b
 `)
 	writeFile(t, filepath.Join(root, UsersFilename), `
 users:
@@ -60,6 +59,12 @@ networks: [{name: home}, {name: internet}]
 universal: internet
 `)
 
+	writeFile(t, filepath.Join(root, HostsFilename), `hosts:
+  host-a:
+    endpoints: {internet: {address: 203.0.113.10}}
+  host-b:
+    reaches: [home]
+`)
 	got, err := Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -152,8 +157,6 @@ func TestLoad_InstanceValuesAreOpaque(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, NodesDir, "srv.yaml"), `
 id: srv
-networks:
-  internet: 203.0.113.10
 instances:
   - id: hy2-sea01
     service: hysteria2
@@ -272,7 +275,7 @@ func TestLoad_MissingRootIsAnError(t *testing.T) {
 func TestLoad_BrokenNodeIsListedWithParseError(t *testing.T) {
 	root := t.TempDir()
 
-	writeFile(t, filepath.Join(root, NodesDir, "good.yaml"), "id: good\nreaches: [home]\n")
+	writeFile(t, filepath.Join(root, NodesDir, "good.yaml"), "id: good\n")
 	// Invalid YAML.
 	writeFile(t, filepath.Join(root, NodesDir, "bad-syntax.yaml"), "id: [unterminated\n")
 	// Unknown key.

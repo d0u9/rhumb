@@ -674,6 +674,8 @@ they are flat:
 | `mapping` | Where a container runtime publishes one of this instance's ports on the machine it runs on: `.Addresses`, one per network it is reached over, and `.Number`. Both are derived, and it is read only in a [deploy template](#a-second-file-what-deploys-it) — every other render is handed none. |
 | `upstreams` | Every upstream of a program that is one process over several routes — a device profile that `runs` it — each resolved as `upstream` is, with `route` and `service` (what it authenticates against) beside. With one route, `upstream` is that one too; with more, `upstream` fails naming them, so a program that takes one says so where it is rendered. |
 | `replace` | Every occurrence of a string replaced, for a value two programs write differently — a port range `first-last` in the inventory is `first:last` to sing-box. |
+| `names` | Network DNS records: `.Name`, `.Type`, `.Value`, `.Source`; includes CNAMEs. See [names on a network](inventory.md#names-on-a-network). |
+| `flatnames` | The same table with CNAME chains resolved to IP records; fails on invalid chains. For hosts-only backends. |
 | `published` | The name one of this instance's own ports answers to, by port name, or empty. A service behind a reverse proxy renders the same string the proxy matches its site block on — `DOMAIN=https://{{ published "web" }}` — so the two cannot disagree. See [the name a port is published at](inventory.md#the-name-a-port-is-published-at). |
 
 Beside them, one accessor per datasource — `defaults`, `node`, `instance`,
@@ -1092,3 +1094,11 @@ New `unlink` and gc ignore the old tool's markers; new `link` refuses to
 overwrite an old shim until it is removed. To roll back, unlink with the
 current ctl, rebuild with the previous tool and relink; on macOS regenerate
 its plist via `ctl enable` or the next `ctl start` as appropriate.
+
+## Device network inventory
+
+A node's `host` reference resolves [device network inventory](inventory.md#device-network-inventory)
+before rendering. Existing `(node).networks`, edge/dial targets, proxy DNS and
+container publication continue to consume effective addresses. Interface IPs
+are not automatically added to publication or used to replace external ingress
+values. This is not an OS networking or NAT-port configuration operation.

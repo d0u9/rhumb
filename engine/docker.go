@@ -116,6 +116,7 @@ func (m Renderer) containerFor(instance string, inst inventory.Instance, node in
 	for port, hm := range m.Data.Derived.Mappings(m.Data.Inv, instance) {
 		mapping[port] = render.Mapping{Addresses: hm.Addresses, Number: hm.Number}
 	}
+	names, namesErr := m.names(node.ID)
 	view := dockerView{in: render.Input{
 		Target:         render.Target{Service: inst.Service, Instance: inventory.LocalName(instance)},
 		Defaults:       defaults,
@@ -125,7 +126,8 @@ func (m Renderer) containerFor(instance string, inst inventory.Instance, node in
 		Node:           nodeValues(node),
 		Published:      m.publishedFor(instance),
 		PublishedNames: m.publishedNamesFor(instance),
-		Names:          m.names(node.ID),
+		Names:          names,
+		NamesError:     namesErr,
 		Mapping:        mapping,
 	}}
 

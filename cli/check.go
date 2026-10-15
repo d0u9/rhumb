@@ -111,7 +111,13 @@ func Check(out io.Writer, global Settings) error {
 // keeps them rather than dropping them, so that an instance which silently
 // stopped appearing is reported instead.
 func BrokenFiles(inv *inventory.Root) []string {
-	var out []string
+	out := append([]string(nil), inv.HostProblems...)
+	if inv.NamesBroken != "" {
+		out = append(out, "names.yaml: "+inv.NamesBroken)
+	}
+	if inv.HostsBroken != "" {
+		out = append(out, "hosts.yaml: "+inv.HostsBroken)
+	}
 	for _, n := range inv.Nodes {
 		if n.Broken != "" {
 			out = append(out, fmt.Sprintf("%s: %s", n.Path, n.Broken))

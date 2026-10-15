@@ -341,7 +341,7 @@ func TestContainerNames_AProxiedNameAnswersAtTheProxysFixedAddress(t *testing.T)
 	if len(conflicts) != 0 {
 		t.Fatalf("conflicts = %v, want none", conflicts)
 	}
-	want := []Name{{Name: "paste.example.org", Address: "172.29.250.10", Source: "bin-sea01:web"}}
+	want := []Name{{Name: "paste.example.org", Type: "A", Value: "172.29.250.10", Source: "bin-sea01:web"}}
 	if len(got) != 1 || len(got["tailnet"]) != 1 || got["tailnet"][0] != want[0] {
 		t.Fatalf("ContainerNames = %+v, want tailnet holding %+v alone", got, want)
 	}

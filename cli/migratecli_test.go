@@ -23,13 +23,13 @@ func TestMigrateNodePreviewShowsChangedEdgeWithoutWriting(t *testing.T) {
 	}
 	var out bytes.Buffer
 	err = Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=internet,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv08", "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
-	for _, want := range []string{"| Node ID | `srv` | `srv08` |", "| Address on internet | `203.0.113.10` | `203.0.113.8` |", "### Route edges\n\n| Edge |", "#### `srv08`", "| `hysteria2/u-node-group-09` | `config.yaml` | bundle path moves; **content changed** |", "#### `friend-a`", "| `hysteria2/yak-default-sea-hysteria2-link` | `share.txt` | content changed |", "rhumb export instance:'yak-default-sea-hysteria2-link'", "### Secret paths\n\n- added: `srv08/u-node-group-09/main/friend-a/default`\n- removed: `srv/u-node-group-09/main/friend-a/default`", "No inventory, secret or DNS change has been made"} {
+	for _, want := range []string{"| Node ID | `srv` | `srv08` |", "| Host endpoint internet | `203.0.113.10` | `203.0.113.8` |", "### Route edges\n\n| Edge |", "#### `srv08`", "| `hysteria2/u-node-group-09` | `config.yaml` | bundle path moves; **content changed** |", "#### `friend-a`", "| `hysteria2/yak-default-sea-hysteria2-link` | `share.txt` | content changed |", "rhumb export instance:'yak-default-sea-hysteria2-link'", "### Secret paths\n\n- added: `srv08/u-node-group-09/main/friend-a/default`\n- removed: `srv/u-node-group-09/main/friend-a/default`", "No inventory, secret or DNS change has been made"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("preview missing %q:\n%s", want, got)
 		}
@@ -115,7 +115,7 @@ func TestReportServiceReferencesFlagsUnchangedInstanceID(t *testing.T) {
 	err := reportServiceReferences(rep, root, "node-4-server-linux-01", inventory.Node{
 		Path:      "nodes/home/server.yaml",
 		Instances: []inventory.Instance{{ID: "samba-network-4-01", Path: "nodes/home/server.yaml"}},
-	}, []NetworkChange{{From: "network-4", To: "network-8"}}, nil, nil)
+	}, []NetworkChange{{From: "network-4", To: "network-8"}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestMigrationAddressChangeReviewsUnchangedPublishedName(t *testing.T) {
 	writeFile(t, path, strings.Replace(string(data), "main: 443", "main: {port: 443, published: service.example.test}", 1))
 	var out bytes.Buffer
 	err = Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=internet,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv08", "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +232,7 @@ func TestMigratePreviewMarksMissingSecretsUncompared(t *testing.T) {
 	}
 	var out bytes.Buffer
 	err = Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=internet,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv08", "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
@@ -248,7 +248,7 @@ func TestMigratePreviewListsLiteralServiceNodeReferences(t *testing.T) {
 	writeFile(t, filepath.Join(root, "services", "hysteria2", "templates", "server.yaml.tmpl"), "listen: {{ .listen }}\n# srv 203.0.113.10\n")
 	var out bytes.Buffer
 	err := Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=internet,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv08", "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +264,7 @@ func TestMigratePreviewListsLiteralServiceNodeReferences(t *testing.T) {
 func TestMigrateNodePreviewRejectsUnknownNetwork(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
 	err := Migrate(nil, &bytes.Buffer{}, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=home,address=10.0.1.8"]`,
+		"node": "from=srv,to=srv08", "network": `["from=home,to=lan"]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err == nil || !strings.Contains(err.Error(), `no address on network "home"`) {
 		t.Fatalf("error = %v", err)
@@ -276,7 +276,7 @@ func TestMigrateNodePreviewRequiresNamedDirection(t *testing.T) {
 	if err := Migrate(nil, &bytes.Buffer{}, []string{"node", "srv", "srv08"}, nil, Settings{Root: root, Secrets: secrets}); err == nil || !strings.Contains(err.Error(), "--node") {
 		t.Fatalf("old positional form error = %v", err)
 	}
-	if err := Migrate(nil, &bytes.Buffer{}, []string{"node"}, map[string]string{"node": "from=srv,to=srv08", "network": `["address=203.0.113.8"]`}, Settings{Root: root, Secrets: secrets}); err == nil || !strings.Contains(err.Error(), "give from") {
+	if err := Migrate(nil, &bytes.Buffer{}, []string{"node"}, map[string]string{"node": "from=srv,to=srv08", "network": `["to=wan"]`}, Settings{Root: root, Secrets: secrets}); err == nil || !strings.Contains(err.Error(), "give from") {
 		t.Fatalf("missing network error = %v", err)
 	}
 }
@@ -285,12 +285,12 @@ func TestMigrateNodePreviewAllowsAddressOnlyChange(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
 	var out bytes.Buffer
 	err := Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv", "network": `["from=internet,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv", "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "| Address on internet | `203.0.113.10` | `203.0.113.8` |") {
+	if !strings.Contains(out.String(), "| Host endpoint internet | `203.0.113.10` | `203.0.113.8` |") {
 		t.Fatalf("preview = %s", out.String())
 	}
 }
@@ -299,13 +299,13 @@ func TestMigrateNodePreviewRenamesNetworkAndAddress(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
 	var out bytes.Buffer
 	err := Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node": "from=srv,to=srv08", "network": `["from=internet,to=wan,address=203.0.113.8"]`,
+		"node": "from=srv,to=srv08", "network": `["from=internet,to=wan"]`, "host-edit": `[{"kind":"endpoint","network":"internet","from":"203.0.113.10","to":"203.0.113.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
-	for _, want := range []string{"| Network name | `internet` | `wan` |", "networks.yaml: networks", "networks.yaml: universal", "nodes/srv.yaml: networks.internet", "| Address on wan | `203.0.113.10` | `203.0.113.8` |"} {
+	for _, want := range []string{"| Network name | `internet` | `wan` |", "networks.yaml: networks", "networks.yaml: universal", "hosts.yaml: hosts.host-a.endpoints.internet", "| Host endpoint internet | `203.0.113.10` | `203.0.113.8` |"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("preview missing %q:\n%s", want, got)
 		}
@@ -314,23 +314,19 @@ func TestMigrateNodePreviewRenamesNetworkAndAddress(t *testing.T) {
 
 func TestMigrateNodePreviewHandlesMultipleNetworks(t *testing.T) {
 	root, secrets := buildExportableRoot(t)
-	path := filepath.Join(root, "nodes", "srv.yaml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, path, strings.Replace(string(data), "  internet: 203.0.113.10", "  network-4: 10.0.1.4\n  tailnet: 10.0.2.4\n  internet: 203.0.113.10", 1))
+	writeTestHost(t, root, "host-a", inventory.Host{Endpoints: map[string]inventory.Endpoint{"network-4": {Address: "10.0.1.4"}, "tailnet": {Address: "10.0.2.4"}, "internet": {Address: "203.0.113.10"}}})
 	writeFile(t, filepath.Join(root, "networks.yaml"), "networks: [{name: network-4}, {name: tailnet}, {name: internet}]\nuniversal: internet\n")
 	var out bytes.Buffer
-	err = Migrate(nil, &out, []string{"node"}, map[string]string{
-		"node":    "from=srv,to=srv08",
-		"network": `["from=network-4,to=network-8,address=10.0.1.8","from=tailnet,address=10.0.2.8"]`,
+	err := Migrate(nil, &out, []string{"node"}, map[string]string{
+		"node":      "from=srv,to=srv08",
+		"network":   `["from=network-4,to=network-8"]`,
+		"host-edit": `[{"kind":"endpoint","network":"network-4","from":"10.0.1.4","to":"10.0.1.8"},{"kind":"endpoint","network":"tailnet","from":"10.0.2.4","to":"10.0.2.8"}]`,
 	}, Settings{Root: root, Secrets: secrets})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
-	for _, want := range []string{"| Network name | `network-4` | `network-8` |", "| Address on network-8 | `10.0.1.4` | `10.0.1.8` |", "| Address on tailnet | `10.0.2.4` | `10.0.2.8` |"} {
+	for _, want := range []string{"| Network name | `network-4` | `network-8` |", "| Host endpoint network-4 | `10.0.1.4` | `10.0.1.8` |", "| Host endpoint tailnet | `10.0.2.4` | `10.0.2.8` |"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("preview missing %q:\n%s", want, got)
 		}
@@ -359,8 +355,9 @@ func TestParseNodeChangeRequiresNamedEndpoints(t *testing.T) {
 func TestRenameInventoryNetworkUpdatesAllTypedReferencesWithoutMutatingSource(t *testing.T) {
 	old := &inventory.Root{
 		Networks: []string{"network-4", "internet"},
-		Nodes: []inventory.Node{{ID: "server", Path: "nodes/home/server.yaml", Networks: inventory.Networks{"network-4": "10.0.1.4"}},
-			{ID: "phone", Path: "nodes/alice/phone.yaml", Reaches: []string{"network-4"}}},
+		Nodes: []inventory.Node{{ID: "server", Path: "nodes/home/server.yaml", Host: "host-a"},
+			{ID: "phone", Path: "nodes/alice/phone.yaml", Host: "host-b"}},
+		Hosts: map[string]inventory.Host{"host-a": {Names: map[string][]inventory.NameRef{"host-a.example.test": {{Endpoint: "network-4"}}}, Endpoints: map[string]inventory.Endpoint{"network-4": {Address: "10.0.1.4"}}}, "host-b": {Reaches: []string{"network-4"}}},
 		Users: map[string]inventory.User{"alice": {Credentials: map[string]inventory.Credential{
 			"first": {Reaches: []string{"network-4"}}, "second": {Reaches: []string{"network-4"}},
 		}}},
@@ -371,10 +368,10 @@ func TestRenameInventoryNetworkUpdatesAllTypedReferencesWithoutMutatingSource(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(refs) != 5 || copyOf.Networks[0] != "network-8" || copyOf.Nodes[0].Networks["network-8"] != "10.0.1.4" || copyOf.Nodes[1].Reaches[0] != "network-8" || copyOf.Users["alice"].Credentials["first"].Reaches[0] != "network-8" || copyOf.Users["alice"].Credentials["second"].Reaches[0] != "network-8" {
+	if len(refs) != 6 || copyOf.Hosts["host-a"].Names["host-a.example.test"][0].Endpoint != "network-8" || copyOf.Networks[0] != "network-8" || copyOf.Hosts["host-a"].Endpoints["network-8"].Address != "10.0.1.4" || copyOf.Hosts["host-b"].Reaches[0] != "network-8" || copyOf.Users["alice"].Credentials["first"].Reaches[0] != "network-8" || copyOf.Users["alice"].Credentials["second"].Reaches[0] != "network-8" {
 		t.Fatalf("renamed snapshot = %+v, refs = %v", copyOf, refs)
 	}
-	if old.Networks[0] != "network-4" || old.Nodes[0].Networks["network-4"] != "10.0.1.4" || old.Nodes[1].Reaches[0] != "network-4" || old.Users["alice"].Credentials["first"].Reaches[0] != "network-4" {
+	if old.Hosts["host-a"].Names["host-a.example.test"][0].Endpoint != "network-4" || old.Networks[0] != "network-4" || old.Hosts["host-a"].Endpoints["network-4"].Address != "10.0.1.4" || old.Hosts["host-b"].Reaches[0] != "network-4" || old.Users["alice"].Credentials["first"].Reaches[0] != "network-4" {
 		t.Fatal("source inventory was mutated")
 	}
 }

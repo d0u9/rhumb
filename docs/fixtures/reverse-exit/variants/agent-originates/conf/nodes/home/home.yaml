@@ -1,6 +1,4 @@
 id: home
-networks:
-  lan: 10.0.0.20
 instances:
   # Changed: the agent also listens, as a local SOCKS entry for this machine,
   # so traffic would start at the from end of home-nce.
@@ -14,3 +12,4 @@ instances:
     bind: 127.0.0.1
     ports:
       users: 8388
+host: home

@@ -1,4 +1,4 @@
-# A file server on the house network.
+# A file server on the house network. Its interfaces are in hosts.yaml.
 #
 # It has an address on `home` and none on `internet`: nothing outside the
 # house dials it, and writing an address it does not answer on would describe
@@ -6,8 +6,7 @@
 
 id: nas
 
-networks:
-  home: 10.0.0.10
+host: nas
 
 instances:
 

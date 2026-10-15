@@ -1,7 +1,5 @@
 # Changed: both instances in containers on one network.
 id: home
-networks:
-  lan: 10.0.0.20
 containers:
   - {name: apps, subnet: 172.29.0.0/24}
 instances:
@@ -14,3 +12,4 @@ instances:
     bind: "0.0.0.0"
     ports:
       users: 8388
+host: home

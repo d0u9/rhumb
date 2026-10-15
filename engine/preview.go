@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/d0u9/rhumb/confgen"
 	"github.com/d0u9/rhumb/derive"
@@ -137,6 +138,7 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 		}
 	}
 
+	names, namesErr := m.names(t.Node)
 	out := make([]artefact, 0, len(files))
 	for _, file := range files {
 		templatePath := filepath.Join(dir, file.Template)
@@ -159,7 +161,8 @@ func (m Renderer) RenderTarget(instance string) ([]artefact, error) {
 			Dials:          dials,
 			Links:          links,
 			Members:        members,
-			Names:          m.names(t.Node),
+			Names:          names,
+			NamesError:     namesErr,
 			Principals:     principals,
 			Self:           own,
 		})
@@ -898,6 +901,7 @@ func (m Renderer) deployFor(instance string) ([]deployArtefact, error) {
 		nodeMap = nodeValues(node)
 	}
 
+	names, namesErr := m.names(t.Node)
 	out := make([]deployArtefact, 0, len(deploy.Files))
 	for _, file := range deploy.Files {
 		templatePath := filepath.Join(dir, file.Template)
@@ -916,7 +920,8 @@ func (m Renderer) deployFor(instance string) ([]deployArtefact, error) {
 			Downstreams:    m.downstreamsFor(instance, m.Data.Manifests[t.Service].FansOut()),
 			Published:      m.publishedFor(instance),
 			PublishedNames: m.publishedNamesFor(instance),
-			Names:          m.names(t.Node),
+			Names:          names,
+			NamesError:     namesErr,
 			Mapping:        mapping,
 		})
 		if err != nil {
@@ -974,22 +979,32 @@ func (m Renderer) realInstance(instance string) (*inventory.Instance, inventory.
 // names is every network's name table and each container network's on
 // node, for the names template function. Rule 33 keeps a container
 // network's name from being a network's, so the two never share a key.
-func (m Renderer) names(node string) map[string][]render.Name {
+func (m Renderer) names(node string) (map[string][]render.Name, error) {
 	fansOut := func(instance string) bool {
 		inst := m.InstanceByID(instance)
 		return inst != nil && m.Data.Manifests[inst.Service].FansOut() && m.Data.Manifests[inst.Service].DispatchesBy() == confgen.DispatchName
 	}
-	tables, _ := derive.Names(m.Data.Inv, fansOut)
-	containers, _ := derive.ContainerNames(m.Data.Inv, node, fansOut)
+	tables, problems := derive.Names(m.Data.Inv, fansOut)
+	containers, containerProblems := derive.ContainerNames(m.Data.Inv, node, fansOut)
+	problems = append(problems, containerProblems...)
+	problems = append(problems, m.Data.Inv.HostProblems...)
+	if m.Data.Inv.HostsBroken != "" {
+		problems = append(problems, m.Data.Inv.HostsBroken)
+	}
+	if m.Data.Inv.NamesBroken != "" {
+		problems = append(problems, m.Data.Inv.NamesBroken)
+	}
 	out := make(map[string][]render.Name, len(tables)+len(containers))
 	for _, from := range []map[string][]derive.Name{tables, containers} {
 		for network, list := range from {
-			for _, n := range list {
-				out[network] = append(out[network], render.Name{Name: n.Name, Address: n.Address})
-			}
+			out[network] = append(out[network], list...)
 		}
 	}
-	return out
+	if len(problems) > 0 {
+		sort.Strings(problems)
+		return out, fmt.Errorf("invalid DNS inventory: %s", strings.Join(problems, "; "))
+	}
+	return out, nil
 }
 
 // publishedNamesFor is every name each of this instance's ports is

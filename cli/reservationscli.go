@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/d0u9/rhumb/derive"
+	"github.com/d0u9/rhumb/validate"
 )
 
 func Reservations(in io.Reader, out io.Writer, args []string, flags map[string]string, global Settings) error {
@@ -25,6 +26,9 @@ func Reservations(in io.Reader, out io.Writer, args []string, flags map[string]s
 	}
 	if _, ok := l.Inv.NetworkInfo[args[0]]; !ok {
 		return fmt.Errorf("network %q is not declared in networks.yaml", args[0])
+	}
+	if problems := validate.Validate(l.Inv, l.Manifests, l.Exports, l.Derived, nil); len(problems) != 0 {
+		return fmt.Errorf("invalid inventory: %s", problems[0].Message)
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	for _, r := range derive.Reservations(l.Inv, args[0]) {

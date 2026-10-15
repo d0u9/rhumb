@@ -1,0 +1,3 @@
+# Optional DNS aliases follow their targets into each network table.
+names:
+  files.home.test: nas.home.test

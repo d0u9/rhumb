@@ -1,7 +1,5 @@
 # The relay: reachable from the internet, terminates nothing.
 id: nce
-networks:
-  internet: nce.example.net
 instances:
   - id: relay-nce
     service: reverse-relay
@@ -12,3 +10,4 @@ instances:
       home:
         port: 40001
         published: nce.example.net
+host: nce

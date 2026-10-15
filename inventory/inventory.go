@@ -1,7 +1,8 @@
 // Package inventory reads a generator root's inventory: nodes/*.yaml,
 // users.yaml, routes.yaml, links.yaml and networks.yaml, parsed into one
 // model. It only
-// parses — no derivation and no validation. A file that will not parse is
+// parses and resolves explicit host references, without route/service derivation.
+// A file that will not parse is
 // listed with its error rather than dropped, as confgen already does for a
 // broken manifest.
 //
@@ -10,6 +11,7 @@ package inventory
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,14 +23,14 @@ import (
 // NodesDir is the generator root's subdirectory holding one file per node.
 const NodesDir = "nodes"
 
-// UsersFilename, RoutesFilename, LinksFilename and NetworksFilename name the generator
-// root's other inventory files.
+// The generator root's optional top-level inventory files.
 const (
 	UsersFilename    = "users.yaml"
 	RoutesFilename   = "routes.yaml"
 	LinksFilename    = "links.yaml"
 	NetworksFilename = "networks.yaml"
 	HostsFilename    = "hosts.yaml"
+	NamesFilename    = "names.yaml"
 )
 
 // DevicesNone is the one value a user's `devices` key may take: this person
@@ -61,54 +63,8 @@ const (
 	RuntimePodman = "podman"
 )
 
-// Networks is a node's `networks` key: a mapping of network name to this
-// node's address on it. It says where others can reach this node.
-//
-// An entry is an address, or {address, mac} for a network that hands
-// addresses out by hardware address; the mac is kept in Node.MACs.
+// Networks is a node's computed connection targets, keyed by network scope.
 type Networks map[string]string
-
-// UnmarshalYAML accepts both spellings of an entry.
-func (ns *Networks) UnmarshalYAML(value *yaml.Node) error {
-	entries, err := decodeAddresses(value)
-	if err != nil {
-		return err
-	}
-	out := make(Networks, len(entries))
-	for name, e := range entries {
-		out[name] = e.Address
-	}
-	*ns = out
-	return nil
-}
-
-// address is one entry of a node's `networks` key in its mapping form.
-type address struct {
-	Address string `yaml:"address"`
-	MAC     string `yaml:"mac"`
-}
-
-func decodeAddresses(value *yaml.Node) (map[string]address, error) {
-	var raw map[string]yaml.Node
-	if err := value.Decode(&raw); err != nil {
-		return nil, err
-	}
-	out := make(map[string]address, len(raw))
-	for name, node := range raw {
-		if node.Kind == yaml.ScalarNode {
-			out[name] = address{Address: node.Value}
-			continue
-		}
-		var a address
-		dec := node
-		if err := dec.Decode(&a); err != nil {
-			return nil, fmt.Errorf("network %q: want an address or {address, mac}: %w", name, err)
-		}
-		a.MAC = NormalizeMAC(a.MAC)
-		out[name] = a
-	}
-	return out, nil
-}
 
 // NormalizeMAC writes a hardware address lower case with colons, so a value
 // copied from a router's upper-case or dashed table is the same value.
@@ -124,14 +80,12 @@ type Network struct {
 	Gateway string `yaml:"gateway"`
 }
 
-// Host is one entry of hosts.yaml: a machine this inventory deploys nothing
-// to, but still names and reserves an address for. See
-// docs/inventory.md#hosts.
+// Host contains device network facts, optionally bound to a deployment node.
 type Host struct {
-	Network string   `yaml:"network"`
-	Address string   `yaml:"address"`
-	MAC     string   `yaml:"mac"`
-	Names   []string `yaml:"names"`
+	Names      map[string][]NameRef `yaml:"names,omitempty"`
+	Interfaces map[string]Interface `yaml:"interfaces,omitempty"`
+	Endpoints  map[string]Endpoint  `yaml:"endpoints,omitempty"`
+	Reaches    []string             `yaml:"reaches,omitempty"`
 }
 
 // Instance is one service running on a node, and one rendered configuration file.
@@ -517,6 +471,7 @@ func (ps Ports) Numbers() map[string]int {
 // Node is one nodes/*.yaml file: a machine or a device.
 type Node struct {
 	ID    string `yaml:"id"`
+	Host  string `yaml:"host,omitempty"`
 	Owner string `yaml:"owner"`
 	// Group is the directory this node's file sits in under nodes/, and is
 	// not written in the file: nodes/dana/phone.yaml is grouped under
@@ -527,18 +482,15 @@ type Node struct {
 	// household, a company — and rhumb reads nothing more into it.
 	Group string `yaml:"-"`
 	// Networks says where others can reach this node: network name to
-	// address.
-	Networks Networks `yaml:"networks"`
-	// MACs is the hardware address written beside an address in
-	// `networks`, by network. Read for the reservation export and rule 28.
-	MACs map[string]string `yaml:"-"`
-	// Reaches lists networks this node can open a connection on, without
+	// address. It is computed from Host, never authored here.
+	Networks Networks `yaml:"-"`
+	// Reaches is computed from Host and lists outbound networks without
 	// being reachable on them — a phone or a laptop on the home LAN. Every
-	// node reaches every network it has an address on, and every node
-	// reaches Root.Universal implicitly, so Reaches is written only for the
-	// remaining case. See
+	// node reaches every network it has an endpoint on, and every node
+	// reaches Root.Universal implicitly. Host.Reaches supplies the remaining
+	// explicit scopes. See
 	// docs/inventory.md#reached-and-reaching.
-	Reaches []string `yaml:"reaches"`
+	Reaches []string `yaml:"-"`
 	// Containers is the container networks on this machine, in preference
 	// order: the first is the one a containerised instance joins when it
 	// names none, and two instances sharing several dial over the first of
@@ -815,8 +767,13 @@ type Root struct {
 	NetworkInfo map[string]Network
 
 	// Hosts is hosts.yaml's `hosts` map, keyed by host identifier.
-	Hosts       map[string]Host
-	HostsBroken string
+	Hosts        map[string]Host
+	HostsBroken  string
+	HostProblems []string
+
+	// Names is names.yaml's optional alias-to-target map.
+	Names       map[string]string
+	NamesBroken string
 }
 
 // Load parses a generator root's inventory. A missing nodes/ directory or a
@@ -883,6 +840,11 @@ func Load(root string) (*Root, error) {
 		return nil, err
 	}
 	rt.Hosts, rt.HostsBroken = hosts, brokenHosts
+	rt.Names, rt.NamesBroken, err = loadNames(root)
+	if err != nil {
+		return nil, err
+	}
+	rt.ResolveHosts()
 
 	return rt, nil
 }
@@ -991,27 +953,14 @@ type nodeFileWithDirectory struct {
 func decodeNode(data []byte, node *Node) (string, error) {
 	var peek struct {
 		Instances yaml.Node `yaml:"instances"`
-		Networks  yaml.Node `yaml:"networks"`
+		Host      yaml.Node `yaml:"host"`
 	}
 	if err := yaml.Unmarshal(data, &peek); err != nil {
 		return "", err
 	}
-	defer func() {
-		if peek.Networks.Kind != yaml.MappingNode {
-			return
-		}
-		if entries, err := decodeAddresses(&peek.Networks); err == nil {
-			for name, e := range entries {
-				if e.MAC == "" {
-					continue
-				}
-				if node.MACs == nil {
-					node.MACs = map[string]string{}
-				}
-				node.MACs[name] = e.MAC
-			}
-		}
-	}()
+	if peek.Host.Kind != 0 && (peek.Host.Kind != yaml.ScalarNode || peek.Host.Tag == "!!null" || peek.Host.Value == "") {
+		return "", fmt.Errorf("host must name a nonempty host identifier")
+	}
 	if peek.Instances.Kind != yaml.MappingNode {
 		var doc nodeFile
 		if err := decodeStrict(data, &doc); err != nil {
@@ -1074,7 +1023,7 @@ func loadInstanceDir(root, dir string) ([]Instance, error) {
 			instances = append(instances, instance)
 		case yaml.SequenceNode:
 			var group []Instance
-			if err := decodeStrict(data, &group); err != nil {
+			if err := decodeStrictKind(data, &group, yaml.SequenceNode); err != nil {
 				return nil, fmt.Errorf("instance file %s: %w", path, err)
 			}
 			for i := range group {
@@ -1185,6 +1134,9 @@ func loadHosts(root string) (map[string]Host, string, error) {
 		}
 		return nil, "", fmt.Errorf("inventory: reading %s: %w", path, err)
 	}
+	if err := checkHostMappings(data); err != nil {
+		return nil, fmt.Sprintf("%s: %s", path, err), nil
+	}
 	var doc struct {
 		Hosts map[string]Host `yaml:"hosts"`
 	}
@@ -1192,7 +1144,10 @@ func loadHosts(root string) (map[string]Host, string, error) {
 		return nil, fmt.Sprintf("%s: %s", path, err), nil
 	}
 	for id, h := range doc.Hosts {
-		h.MAC = NormalizeMAC(h.MAC)
+		for key, iface := range h.Interfaces {
+			iface.MAC = NormalizeMAC(iface.MAC)
+			h.Interfaces[key] = iface
+		}
 		doc.Hosts[id] = h
 	}
 	return doc.Hosts, "", nil
@@ -1221,6 +1176,28 @@ func loadNetworks(root string) (networks []Network, universal string, broken str
 // decodeStrict decodes data into v, rejecting unknown fields and a document
 // that is not a mapping.
 func decodeStrict(data []byte, v any) error {
+	return decodeStrictKind(data, v, yaml.MappingNode)
+}
+
+func decodeStrictKind(data []byte, v any, kind yaml.Kind) error {
+	shape := yaml.NewDecoder(strings.NewReader(string(data)))
+	var doc yaml.Node
+	if err := shape.Decode(&doc); err != nil {
+		return err
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != kind {
+		if kind == yaml.SequenceNode {
+			return fmt.Errorf("document must be a sequence")
+		}
+		return fmt.Errorf("document must be a mapping")
+	}
+	var trailing yaml.Node
+	if err := shape.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("expected exactly one YAML document")
+	}
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	return dec.Decode(v)

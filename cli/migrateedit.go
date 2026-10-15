@@ -232,12 +232,6 @@ func (m *migrationYAML) patchNodes(old, next *inventory.Root, networks []Network
 	if len(old.Nodes) != len(next.Nodes) {
 		return fmt.Errorf("migration changed node count")
 	}
-	renamed := map[string]string{}
-	for _, change := range networks {
-		if change.From != change.To {
-			renamed[change.From] = change.To
-		}
-	}
 	for i, source := range old.Nodes {
 		target := next.Nodes[i]
 		file, err := m.file(source.Path)
@@ -246,38 +240,6 @@ func (m *migrationYAML) patchNodes(old, next *inventory.Root, networks []Network
 		}
 		mapping := migrationRoot(&file.doc)
 		changed, err := migrationSetField(mapping, "id", source.ID, target.ID, source.Path+": id")
-		if err != nil {
-			return err
-		}
-		file.changed = file.changed || changed
-		_, addresses := migrationMap(mapping, "networks")
-		for oldName, oldAddress := range source.Networks {
-			newName := oldName
-			if to := renamed[oldName]; to != "" {
-				newName = to
-			}
-			newAddress := target.Networks[newName]
-			if oldName == newName && oldAddress == newAddress {
-				continue
-			}
-			key, value := migrationMap(addresses, oldName)
-			if key == nil {
-				return fmt.Errorf("%s: network %q was not found", source.Path, oldName)
-			}
-			if _, err := migrationScalar(key, oldName, newName, source.Path+": networks key"); err != nil {
-				return err
-			}
-			// An entry is an address or {address, mac}; the mac stays.
-			if value != nil && value.Kind == yaml.MappingNode {
-				_, value = migrationMap(value, "address")
-			}
-			if _, err := migrationScalar(value, oldAddress, newAddress, source.Path+": networks."+oldName); err != nil {
-				return err
-			}
-			file.changed = true
-		}
-		_, reaches := migrationMap(mapping, "reaches")
-		changed, err = migrationSetSequence(reaches, source.Reaches, target.Reaches, source.Path+": reaches")
 		if err != nil {
 			return err
 		}
@@ -340,21 +302,206 @@ func (m *migrationYAML) patchHosts(old, next *inventory.Root) error {
 		return nil
 	}
 	if len(old.Hosts) != len(next.Hosts) {
-		return fmt.Errorf("migration changed host count")
+		return fmt.Errorf("migration cannot create or remove hosts")
 	}
 	file, err := m.file(inventory.HostsFilename)
 	if err != nil {
 		return err
 	}
-	_, hosts := migrationMap(migrationRoot(&file.doc), "hosts")
-	for key, host := range old.Hosts {
-		_, node := migrationMap(hosts, key)
-		changed, err := migrationSetField(node, "network", host.Network, next.Hosts[key].Network, "hosts.yaml: hosts."+key+".network")
+	root := migrationRoot(&file.doc)
+	// Root merges can own hosts too; materialize before locating their source.
+	if err := detachHostAliases(root); err != nil {
+		return err
+	}
+	_, hosts := migrationMap(root, "hosts")
+	if hosts == nil {
+		hosts = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "hosts"}, hosts)
+	}
+	if hosts.Kind != yaml.MappingNode {
+		return fmt.Errorf("hosts must be a mapping")
+	}
+	for _, key := range sortedKeys(next.Hosts) {
+		h := next.Hosts[key]
+		prior, existed := old.Hosts[key]
+		if existed && reflect.DeepEqual(prior, h) {
+			continue
+		}
+		var desired yaml.Node
+		if err := desired.Encode(h); err != nil {
+			return err
+		}
+		_, current := migrationMap(hosts, key)
+		if !existed || current == nil {
+			return fmt.Errorf("host %q has no authored source", key)
+		}
+		var before yaml.Node
+		if err := before.Encode(prior); err != nil {
+			return err
+		}
+		if err := patchHostYAML(current, &before, &desired); err != nil {
+			return fmt.Errorf("host %s: %w", key, err)
+		}
+		file.changed = true
+	}
+	if len(next.Hosts) < len(old.Hosts) {
+		return fmt.Errorf("migration cannot remove hosts")
+	}
+	return nil
+}
+
+// Alias expansion preserves each host's current values during scoped edits.
+func detachHostAliases(node *yaml.Node) error {
+	if node.Kind == yaml.AliasNode {
+		expanded, err := cloneHostYAML(node, map[*yaml.Node]bool{})
 		if err != nil {
 			return err
 		}
-		file.changed = file.changed || changed
+		*node = *expanded
 	}
+	for _, child := range node.Content {
+		if err := detachHostAliases(child); err != nil {
+			return err
+		}
+	}
+	if node.Kind == yaml.MappingNode {
+		return flattenHostMerges(node)
+	}
+	return nil
+}
+
+// Materialize effective keys so removing a field cannot reveal its merged value.
+func flattenHostMerges(node *yaml.Node) error {
+	held := map[string]bool{}
+	var content []*yaml.Node
+	var merges []*yaml.Node
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key, value := node.Content[i], node.Content[i+1]
+		if key.Tag == "!!merge" {
+			merges = append(merges, value)
+			for _, comment := range []string{key.HeadComment, key.LineComment, key.FootComment, value.HeadComment, value.LineComment, value.FootComment} {
+				if comment != "" {
+					if node.FootComment != "" {
+						node.FootComment += "\n"
+					}
+					node.FootComment += comment
+				}
+			}
+		} else {
+			held[key.Value] = true
+			content = append(content, key, value)
+		}
+	}
+	if len(merges) == 0 {
+		return nil
+	}
+	for _, merge := range merges {
+		sources := []*yaml.Node{merge}
+		if merge.Kind == yaml.SequenceNode {
+			sources = merge.Content
+		}
+		for _, source := range sources {
+			if source.Kind != yaml.MappingNode {
+				return fmt.Errorf("host YAML merge requires mappings")
+			}
+			for i := 0; i+1 < len(source.Content); i += 2 {
+				key, value := source.Content[i], source.Content[i+1]
+				if !held[key.Value] {
+					held[key.Value] = true
+					content = append(content, key, value)
+				}
+			}
+		}
+	}
+	node.Content = content
+	return nil
+}
+
+func cloneHostYAML(node *yaml.Node, active map[*yaml.Node]bool) (*yaml.Node, error) {
+	if node == nil || active[node] {
+		return nil, fmt.Errorf("invalid or cyclic host YAML alias")
+	}
+	active[node] = true
+	defer delete(active, node)
+	if node.Kind == yaml.AliasNode {
+		copy, err := cloneHostYAML(node.Alias, active)
+		if err != nil {
+			return nil, err
+		}
+		for _, comment := range []string{node.HeadComment, node.LineComment, node.FootComment} {
+			if comment == "" {
+				continue
+			}
+			// The YAML emitter drops line comments on expanded block mappings.
+			if copy.HeadComment != "" {
+				copy.HeadComment += "\n"
+			}
+			copy.HeadComment += comment
+		}
+		return copy, nil
+	}
+	copy := *node
+	copy.Anchor, copy.Alias = "", nil
+	copy.Content = nil
+	for _, child := range node.Content {
+		next, err := cloneHostYAML(child, active)
+		if err != nil {
+			return nil, err
+		}
+		copy.Content = append(copy.Content, next)
+	}
+	return &copy, nil
+}
+
+func removeMigrationKey(mapping *yaml.Node, key string) {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+			return
+		}
+	}
+}
+
+// Patch only changed typed host fields; retain comments and untouched YAML.
+func patchHostYAML(current, before, after *yaml.Node) error {
+	if reflect.DeepEqual(before, after) {
+		return nil
+	}
+	if current == nil {
+		return fmt.Errorf("missing authored field")
+	}
+	if before.Kind == yaml.MappingNode && after.Kind == yaml.MappingNode && current.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(before.Content); i += 2 {
+			key := before.Content[i].Value
+			_, next := migrationMap(after, key)
+			if next == nil {
+				removeMigrationKey(current, key)
+			}
+		}
+		for i := 0; i+1 < len(after.Content); i += 2 {
+			key := after.Content[i].Value
+			_, old := migrationMap(before, key)
+			_, at := migrationMap(current, key)
+			if old == nil && at == nil {
+				current.Content = append(current.Content, after.Content[i], after.Content[i+1])
+				continue
+			}
+			if old == nil {
+				old = at
+			}
+			if err := patchHostYAML(at, old, after.Content[i+1]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if current.Kind == yaml.ScalarNode && after.Kind == yaml.ScalarNode {
+		current.Value, current.Tag = after.Value, after.Tag
+		return nil
+	}
+	head, line, foot := current.HeadComment, current.LineComment, current.FootComment
+	*current = *after
+	current.HeadComment, current.LineComment, current.FootComment = head, line, foot
 	return nil
 }
 
