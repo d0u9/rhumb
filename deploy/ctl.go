@@ -238,8 +238,12 @@ networks() {
 # when it differs.
 place() {
 	mkdir -p "$(dirname "$2")"
-	if [ -f "$2" ] && ! cmp -s "$HERE/files/$1" "$2"; then
-		cp -p -- "$2" "$2.bak"
+	if ! cmp -s "$HERE/files/$1" "$2"; then
+		[ ! -f "$2" ] || cp -p -- "$2" "$2.bak"
+{{- if .C.RestartOnChange}}
+		# Keep restart intent if this install or its restart fails.
+		touch "$DIR/.rhumb-restart-pending"
+{{- end}}
 	fi
 	install -m "$3" "$HERE/files/$1" "$2"
 }
@@ -262,8 +266,21 @@ case ${1:-} in
 install)
 	networks
 	install_files
+{{- if .C.RestartOnChange}}
+	# A stopped or absent container reads the new files when up starts it.
+	running=
+	if [ -f "$DIR/.rhumb-restart-pending" ]; then
+		running=$(compose ps --status running -q {{q .C.Name}})
+	fi
+{{- end}}
 {{- if not .C.OneShot}}
 	compose up -d --remove-orphans
+{{- end}}
+{{- if .C.RestartOnChange}}
+	if [ -n "$running" ]; then
+		compose restart {{q .C.Name}}
+	fi
+	rm -f "$DIR/.rhumb-restart-pending"
 {{- end}}
 {{- if .Reload}}
 	compose exec {{q .C.Name}} {{.Reload}}

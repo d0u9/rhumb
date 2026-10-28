@@ -61,6 +61,7 @@ func TestLoadDocker_Refuses(t *testing.T) {
 		{"a field its own compose would ignore", "compose: c.yaml\nports: {web: tcp}\ndefaults: {image: x}", "defaults.image, ports would be ignored"},
 		{"oneshot without its own compose", `oneshot: true`, "only for a service that writes its own compose"},
 		{"its own compose placed elsewhere", "compose: c.yaml\nfiles: {c.yaml: {host: /etc}}", "placed elsewhere"},
+		{"reload beside restart_on_change", "reload: [x]\nrestart_on_change: true", "reload and restart_on_change exclude each other"},
 		{"setup inside a mount", "mounts: {c: {target: /c, files: [s.sh]}}\nsetup: s.sh", "in a mount"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

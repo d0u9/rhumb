@@ -62,6 +62,10 @@ type Docker struct {
 	// Reload is run in the container after it is started, for a program
 	// that does not reread its configuration on its own.
 	Reload []string `yaml:"reload"`
+	// RestartOnChange restarts the container after install when install
+	// changed a file it placed, for a program that reads its configuration
+	// only at start and has no Reload. It excludes Reload.
+	RestartOnChange bool `yaml:"restart_on_change"`
 	// Setup names a rendered file, a shell script, run on the machine
 	// after the container is started, from the instance's directory, with
 	// CONTAINER set to the container's name: what only this program needs
@@ -151,6 +155,9 @@ func loadDocker(path string) (*Docker, error) {
 }
 
 func (d Docker) check() error {
+	if len(d.Reload) > 0 && d.RestartOnChange {
+		return fmt.Errorf("reload and restart_on_change exclude each other: a program either rereads its configuration on reload or is restarted")
+	}
 	for name, t := range d.Ports {
 		switch t {
 		case TransportTCP, TransportUDP, TransportBoth:
@@ -239,6 +246,7 @@ func (d Docker) checkCompose() error {
 		"ports": len(d.Ports) > 0, "mounts": len(d.Mounts) > 0, "state": len(d.State) > 0,
 		"volumes": len(d.Volumes) > 0, "environment": len(d.Environment) > 0,
 		"privileges": len(d.Privileges) > 0, "reload": len(d.Reload) > 0,
+		"restart_on_change": d.RestartOnChange,
 	} {
 		if on {
 			set = append(set, key)

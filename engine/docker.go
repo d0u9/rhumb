@@ -36,10 +36,11 @@ type manifestContainer struct {
 	Environment map[string]string `yaml:"environment,omitempty"`
 	Mounts      []manifestMount   `yaml:"mounts,omitempty"`
 	// Volumes are named volumes, by name, to the container path.
-	Volumes    map[string]string `yaml:"volumes,omitempty"`
-	Privileges map[string]any    `yaml:"privileges,omitempty"`
-	Reload     []string          `yaml:"reload,omitempty"`
-	Setup      string            `yaml:"setup,omitempty"`
+	Volumes         map[string]string `yaml:"volumes,omitempty"`
+	Privileges      map[string]any    `yaml:"privileges,omitempty"`
+	Reload          []string          `yaml:"reload,omitempty"`
+	RestartOnChange bool              `yaml:"restart_on_change,omitempty"`
+	Setup           string            `yaml:"setup,omitempty"`
 	// Compose names the rendered file that is the compose file, when the
 	// service writes its own; the fields above it are then empty but Dir.
 	Compose  string `yaml:"compose,omitempty"`
@@ -308,6 +309,7 @@ func (m Renderer) containerFor(instance string, inst inventory.Instance, node in
 
 	c.Privileges = docker.Privileges
 	c.Reload = docker.Reload
+	c.RestartOnChange = docker.RestartOnChange
 	if docker.Setup != "" {
 		if !hasFile(man.Files, docker.Setup) {
 			return fail("setup: the service renders no file %s", docker.Setup)

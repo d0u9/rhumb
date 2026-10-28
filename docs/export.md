@@ -323,6 +323,7 @@ defaults:                               # what an instance's deploy overrides
 | `environment` | Set in the container as written. |
 | `privileges` | Merged into the compose service: only `devices`, `cap_add`, `cap_drop`, `sysctls`, `read_only`, `security_opt`, `tmpfs`. |
 | `reload` | Run in the container once it is started, for a program that does not reread its configuration. |
+| `restart_on_change` | `true` restarts a running container after `ctl install` when install placed a new or changed file, for a program that reads its configuration only at start and has no `reload`; defaults to `false`. An absent or stopped container reads the files when started and needs no extra restart. Excludes `reload`. A program that rewrites a file in a writable mount makes it differ on every install, so each install restarts it. |
 | `setup` | A rendered file of the service, a shell script, run on the machine after the container starts, from the instance's directory, with `CONTAINER` set to its name: what only this program needs done once it is up, such as creating its accounts. |
 | `defaults` | The keys an instance's [`deploy`](inventory.md#what-a-container-needs-beyond-the-model) may override. |
 
@@ -342,6 +343,13 @@ alone: `compose.yaml`, the files, and a `ctl` whose `install` creates the
 networks and directories, places the files (keeping a replaced one as `.bak`),
 and starts the container. The instance's directory is the compose project's, so
 its name is the project's name and a named volume's prefix.
+
+With `restart_on_change`, install records pending changes in
+`.rhumb-restart-pending` inside the instance's directory before replacing a
+file. It clears the marker only after starting or restarting succeeds, so a
+failed installation can be retried even when the files already match. Container
+state, rather than the presence of an installed compose file, determines whether
+an extra restart is needed.
 
 A service holds a `docker.yaml` or a [`deploy/`](#a-second-file-what-deploys-it),
 never both.
@@ -365,7 +373,7 @@ rhumb still owns the rest: it creates the networks the instance joins, the
 instance's directory (`deploy.dir`, the only key its `deploy` then takes),
 places the files and runs `setup`. Everything the compose file says is the
 service's, so `ports`, `mounts`, `state`, `volumes`, `environment`,
-`privileges`, `reload`, a file's `target` or `env_file`, and any default but
+`privileges`, `reload`, `restart_on_change`, a file's `target` or `env_file`, and any default but
 `dir` are refused beside `compose`: they would be ignored.
 
 ### A second file: what deploys it
@@ -792,7 +800,7 @@ the manifest carries `container` instead of `deploy`: the instance's `dir`,
 container `name` and `hostname`, `image`, `restart`, `user`, `dns`,
 `env_files`, `environment`, every bind mount with its absolute `source` (and
 `create` for the ones inside `dir` that installing makes), named `volumes`,
-`privileges`, `reload` and `setup`, with no expression left in any of them.
+`privileges`, `reload`, `restart_on_change` and `setup`, with no expression left in any of them.
 Each port gains its `transport`, and each file its `place` — relative to `dir`,
 or an absolute machine path — and `mode`. It is everything `rhumb deploy`
 needs, and all it reads.

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -213,5 +214,152 @@ container:
 	}
 	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
 		t.Fatalf("ctl does not parse: %s", out)
+	}
+}
+
+// restartManifest is an invented DNS server that reads its configuration only
+// at start: install restarts it when a placed file changed.
+func restartManifest(dir string, restart bool) string {
+	return `schema: 1
+node: host-a
+instance: example-dns
+service: example-dns
+runtime: docker
+files:
+  - {path: dns.conf, place: conf/dns.conf, mode: "0644"}
+container:
+  dir: ` + dir + `
+  name: srv.example-dns
+  hostname: srv.example-dns
+  image: example:1
+  user: alice
+  restart_on_change: ` + strconv.FormatBool(restart) + `
+`
+}
+
+func buildRestartBundle(t *testing.T, dir string, restart bool) string {
+	t.Helper()
+	src := t.TempDir()
+	os.WriteFile(filepath.Join(src, "dns.conf"), []byte("zone a\n"), 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte(restartManifest(dir, restart)), 0o600)
+	dst := filepath.Join(t.TempDir(), "b")
+	if err := Build(src, dst, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	return dst
+}
+
+func TestBuild_RestartOnChangeOnlyWhenSet(t *testing.T) {
+	const branch = "compose restart 'srv.example-dns'"
+	on, _ := os.ReadFile(filepath.Join(buildRestartBundle(t, "/srv/docker/dns", true), "ctl"))
+	if !strings.Contains(string(on), branch) {
+		t.Errorf("ctl lacks %q:\n%s", branch, on)
+	}
+	off, _ := os.ReadFile(filepath.Join(buildRestartBundle(t, "/srv/docker/dns", false), "ctl"))
+	if strings.Contains(string(off), "compose restart") {
+		t.Errorf("ctl restarts without restart_on_change")
+	}
+}
+
+// The fake compose keeps the configuration its process read at start, so
+// successful installs must update that state, including after a failed attempt.
+func TestCtl_RestartsOnlyWhenAFileChanged(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		unchanged     bool
+		removeCompose bool
+		stopped       bool
+		fail          string
+	}{
+		{name: "unchanged", unchanged: true},
+		{name: "changed"},
+		{name: "compose missing", removeCompose: true},
+		{name: "stopped", stopped: true},
+		{name: "retry failed restart", fail: "restart"},
+		{name: "retry failed up", fail: "up"},
+		{name: "retry failed state query", fail: "ps"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "dns")
+			b := buildRestartBundle(t, dir, true)
+			fake := filepath.Join(t.TempDir(), "compose")
+			write := func(path, body string, mode os.FileMode) {
+				t.Helper()
+				if err := os.WriteFile(path, []byte(body), mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			read := func(path string) string {
+				t.Helper()
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(data)
+			}
+			write(fake, `#!/bin/sh
+set -eu
+dir=$2
+shift 4
+echo "$*" >> "$dir/calls"
+[ ! -f "$dir/fail-$1" ] || exit 1
+case $1 in
+ps) if [ -f "$dir/running" ]; then echo container-id; fi ;;
+up)
+	if [ ! -f "$dir/running" ]; then
+		cp "$dir/conf/dns.conf" "$dir/active.conf"
+		touch "$dir/running"
+	fi
+	;;
+restart) cp "$dir/conf/dns.conf" "$dir/active.conf" ;;
+*) exit 2 ;;
+esac
+`, 0o755)
+			install := func(wantFailure bool) string {
+				t.Helper()
+				os.Remove(filepath.Join(dir, "calls"))
+				cmd := exec.Command("sh", filepath.Join(b, "ctl"), "install")
+				cmd.Env = append(os.Environ(), "COMPOSE="+fake)
+				out, err := cmd.CombinedOutput()
+				if (err != nil) != wantFailure {
+					t.Fatalf("install: %v (want failure %t)\n%s", err, wantFailure, out)
+				}
+				return read(filepath.Join(dir, "calls"))
+			}
+			if got := install(false); !strings.Contains(got, "up -d") || strings.Contains(got, "restart") {
+				t.Fatalf("first install: %s", got)
+			}
+			want := "zone a\n"
+			if !tc.unchanged {
+				want = "zone b\n"
+				write(filepath.Join(b, "files", "dns.conf"), want, 0o644)
+			}
+			for path, remove := range map[string]bool{"compose.yaml": tc.removeCompose, "running": tc.stopped} {
+				if remove {
+					if err := os.Remove(filepath.Join(dir, path)); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if tc.fail != "" {
+				flag := filepath.Join(dir, "fail-"+tc.fail)
+				write(flag, "", 0o600)
+				install(true)
+				if err := os.Remove(flag); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := install(false)
+			wantRestart := !tc.unchanged && !tc.stopped
+			if strings.Contains(got, "restart srv.example-dns") != wantRestart {
+				t.Errorf("want restart %t, calls:\n%s", wantRestart, got)
+			}
+			if got := read(filepath.Join(dir, "active.conf")); got != want {
+				t.Errorf("running configuration = %q, want %q", got, want)
+			}
+			if got := install(false); strings.Contains(got, "restart") {
+				t.Errorf("unchanged install restarted after success: %s", got)
+			}
+		})
 	}
 }

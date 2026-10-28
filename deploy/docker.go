@@ -16,20 +16,21 @@ import (
 // Container is how a containerised instance is started, as the manifest
 // resolved it: nothing in it is left to interpret.
 type Container struct {
-	Dir         string            `yaml:"dir"`
-	Name        string            `yaml:"name"`
-	Hostname    string            `yaml:"hostname"`
-	Image       string            `yaml:"image"`
-	Restart     string            `yaml:"restart"`
-	User        string            `yaml:"user"`
-	DNS         []string          `yaml:"dns"`
-	EnvFiles    []string          `yaml:"env_files"`
-	Environment map[string]string `yaml:"environment"`
-	Mounts      []Mount           `yaml:"mounts"`
-	Volumes     map[string]string `yaml:"volumes"`
-	Privileges  map[string]any    `yaml:"privileges"`
-	Reload      []string          `yaml:"reload"`
-	Setup       string            `yaml:"setup"`
+	Dir             string            `yaml:"dir"`
+	Name            string            `yaml:"name"`
+	Hostname        string            `yaml:"hostname"`
+	Image           string            `yaml:"image"`
+	Restart         string            `yaml:"restart"`
+	User            string            `yaml:"user"`
+	DNS             []string          `yaml:"dns"`
+	EnvFiles        []string          `yaml:"env_files"`
+	Environment     map[string]string `yaml:"environment"`
+	Mounts          []Mount           `yaml:"mounts"`
+	Volumes         map[string]string `yaml:"volumes"`
+	Privileges      map[string]any    `yaml:"privileges"`
+	Reload          []string          `yaml:"reload"`
+	RestartOnChange bool              `yaml:"restart_on_change"`
+	Setup           string            `yaml:"setup"`
 	// Compose names the file of the bundle that is the compose file, when
 	// the service wrote its own; nothing above but Dir is then set.
 	Compose  string `yaml:"compose"`
