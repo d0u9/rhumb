@@ -269,12 +269,14 @@ func TestCtl_RestartsOnlyWhenAFileChanged(t *testing.T) {
 		unchanged     bool
 		removeCompose bool
 		stopped       bool
+		absent        bool
 		fail          string
 	}{
 		{name: "unchanged", unchanged: true},
 		{name: "changed"},
 		{name: "compose missing", removeCompose: true},
 		{name: "stopped", stopped: true},
+		{name: "container removed", absent: true},
 		{name: "retry failed restart", fail: "restart"},
 		{name: "retry failed up", fail: "up"},
 		{name: "retry failed state query", fail: "ps"},
@@ -304,11 +306,11 @@ shift 4
 echo "$*" >> "$dir/calls"
 [ ! -f "$dir/fail-$1" ] || exit 1
 case $1 in
-ps) if [ -f "$dir/running" ]; then echo container-id; fi ;;
+ps) if [ -f "$dir/container" ]; then echo container-id; fi ;;
 up)
 	if [ ! -f "$dir/running" ]; then
 		cp "$dir/conf/dns.conf" "$dir/active.conf"
-		touch "$dir/running"
+		touch "$dir/container" "$dir/running"
 	fi
 	;;
 restart) cp "$dir/conf/dns.conf" "$dir/active.conf" ;;
@@ -334,7 +336,11 @@ esac
 				want = "zone b\n"
 				write(filepath.Join(b, "files", "dns.conf"), want, 0o644)
 			}
-			for path, remove := range map[string]bool{"compose.yaml": tc.removeCompose, "running": tc.stopped} {
+			for path, remove := range map[string]bool{
+				"compose.yaml": tc.removeCompose,
+				"running":      tc.stopped || tc.absent,
+				"container":    tc.absent,
+			} {
 				if remove {
 					if err := os.Remove(filepath.Join(dir, path)); err != nil {
 						t.Fatal(err)
@@ -350,7 +356,7 @@ esac
 				}
 			}
 			got := install(false)
-			wantRestart := !tc.unchanged && !tc.stopped
+			wantRestart := !tc.unchanged && !tc.absent
 			if strings.Contains(got, "restart srv.example-dns") != wantRestart {
 				t.Errorf("want restart %t, calls:\n%s", wantRestart, got)
 			}

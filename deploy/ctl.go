@@ -242,7 +242,7 @@ place() {
 		[ ! -f "$2" ] || cp -p -- "$2" "$2.bak"
 {{- if .C.RestartOnChange}}
 		# Keep restart intent if this install or its restart fails.
-		touch "$DIR/.rhumb-restart-pending"
+		touch "$DIR/.{{.Tool}}-restart-pending"
 {{- end}}
 	fi
 	install -m "$3" "$HERE/files/$1" "$2"
@@ -267,20 +267,20 @@ install)
 	networks
 	install_files
 {{- if .C.RestartOnChange}}
-	# A stopped or absent container reads the new files when up starts it.
-	running=
-	if [ -f "$DIR/.rhumb-restart-pending" ]; then
-		running=$(compose ps --status running -q {{q .C.Name}})
+	# Only an absent container is guaranteed to read the files on first start.
+	container=
+	if [ -f "$DIR/.{{.Tool}}-restart-pending" ]; then
+		container=$(compose ps -a -q {{q .C.Name}})
 	fi
 {{- end}}
 {{- if not .C.OneShot}}
 	compose up -d --remove-orphans
 {{- end}}
 {{- if .C.RestartOnChange}}
-	if [ -n "$running" ]; then
+	if [ -n "$container" ]; then
 		compose restart {{q .C.Name}}
 	fi
-	rm -f "$DIR/.rhumb-restart-pending"
+	rm -f "$DIR/.{{.Tool}}-restart-pending"
 {{- end}}
 {{- if .Reload}}
 	compose exec {{q .C.Name}} {{.Reload}}

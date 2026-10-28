@@ -251,7 +251,7 @@ func renderDockerCtl(m Manifest, prefix, tool string) ([]byte, error) {
 	sort.Slice(creates, func(i, j int) bool { return creates[i].Dir < creates[j].Dir })
 	var out bytes.Buffer
 	err := dockerCtlTemplate.Execute(&out, map[string]any{
-		"Writer": toolWriter(tool),
+		"Tool": tool, "Writer": toolWriter(tool),
 		"M":      m, "C": m.Container, "Label": Label(m, prefix), "Places": places, "Creates": creates,
 		"Reload": strings.Join(quoteAll(m.Container.Reload), " "),
 	})
