@@ -782,7 +782,19 @@ processes:
 
 `service` is the program: its template renders the process, and its deploy
 directory, when it has one, deploys it. `values` and `deploy` are the
-program's own, as an instance's are.
+program's own, as an instance's are, and so is `self`: it narrows the
+secrets the service declares for itself to the ones this process holds,
+exactly as [an instance's](#a-services-own-secrets) does. A process using
+none of an optional feature names the keys it does use, and is not asked
+for that feature's:
+
+```yaml
+processes:
+  proxy-a:
+    service: proxy
+    self:
+      tunnel_key:      # holds this one; the service's other own keys are not implied
+```
 
 **The members keep everything that is theirs.** Each member's service still
 decides what it is: whether it terminates, forwards or fans out, how it

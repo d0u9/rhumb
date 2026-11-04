@@ -1207,11 +1207,15 @@ func decodeStrictKind(data []byte, v any, kind yaml.Kind) error {
 const QualifiedSep = "/"
 
 // Process is one entry of a node's processes: the program running its
-// members. Values and Deploy are the program's own, as an instance's are.
+// members. Values, Deploy and Self are the program's own, as an instance's
+// are: Self narrows the secrets its service declares for itself to the ones
+// this process holds, so a process using none of an optional feature is not
+// asked for that feature's key. See Instance.Self.
 type Process struct {
-	Service string         `yaml:"service"`
-	Values  map[string]any `yaml:"values"`
-	Deploy  map[string]any `yaml:"deploy"`
+	Service string              `yaml:"service"`
+	Values  map[string]any      `yaml:"values"`
+	Deploy  map[string]any      `yaml:"deploy"`
+	Self    map[string][]string `yaml:"self"`
 }
 
 // addProcesses appends one instance per declared process. Its ports are its
@@ -1232,7 +1236,7 @@ func addProcesses(node *Node) {
 		decl := node.Processes[name]
 		proc := Instance{
 			Name: name, ID: node.ID + QualifiedSep + name, Service: decl.Service,
-			Values: decl.Values, Deploy: decl.Deploy, Path: node.Path, Ports: Ports{},
+			Values: decl.Values, Deploy: decl.Deploy, Self: decl.Self, Path: node.Path, Ports: Ports{},
 		}
 		for _, inst := range node.Instances {
 			if inst.Process != name || len(inst.Members) > 0 {

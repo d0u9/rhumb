@@ -567,3 +567,47 @@ func TestLoad_ReverseExitFixtureLinks(t *testing.T) {
 		t.Fatalf("Links = %+v", got.Links)
 	}
 }
+
+// TestAddProcesses_SelfNarrowsTheProcess: a process names the secrets of its
+// own it holds, as an instance does, so one that uses no optional feature is
+// not asked for that feature's key. Unwritten still means all of them.
+func TestAddProcesses_SelfNarrowsTheProcess(t *testing.T) {
+	node := Node{
+		ID: "host-a",
+		Processes: map[string]Process{
+			"proc-a": {Service: "svc", Self: map[string][]string{"key-a": nil}},
+			"proc-b": {Service: "svc"},
+		},
+		Instances: []Instance{
+			{ID: "host-a/inst-a", Service: "member", Process: "proc-a", Ports: PortsOf(map[string]int{"pa": 1000})},
+			{ID: "host-a/inst-b", Service: "member", Process: "proc-b", Ports: PortsOf(map[string]int{"pb": 1001})},
+		},
+	}
+	addProcesses(&node)
+	declared := []string{"key-a", "key-b"}
+	got := map[string][]string{}
+	for _, inst := range node.Instances {
+		if inst.Name == "proc-a" || inst.Name == "proc-b" {
+			got[inst.Name] = inst.SelfNames(declared)
+		}
+	}
+	if fmt.Sprint(got["proc-a"]) != "[key-a]" {
+		t.Fatalf("proc-a holds %v, want only key-a", got["proc-a"])
+	}
+	if fmt.Sprint(got["proc-b"]) != "[key-a key-b]" {
+		t.Fatalf("proc-b holds %v, want every declared name", got["proc-b"])
+	}
+}
+
+// TestLoad_ProcessSelfIsAKnownField: `self` under a process is read, not
+// rejected as an unknown key.
+func TestLoad_ProcessSelfIsAKnownField(t *testing.T) {
+	var n Node
+	err := decodeStrict([]byte("id: host-a\nprocesses:\n  proc-a:\n    service: svc\n    self:\n      key-a:\n"), &n)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := n.Processes["proc-a"].Self["key-a"]; !ok {
+		t.Fatalf("self = %v, want key-a", n.Processes["proc-a"].Self)
+	}
+}
