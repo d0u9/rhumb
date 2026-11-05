@@ -252,7 +252,7 @@ func renderDockerCtl(m Manifest, prefix, tool string) ([]byte, error) {
 	var out bytes.Buffer
 	err := dockerCtlTemplate.Execute(&out, map[string]any{
 		"Tool": tool, "Writer": toolWriter(tool),
-		"M":      m, "C": m.Container, "Label": Label(m, prefix), "Places": places, "Creates": creates,
+		"M": m, "C": m.Container, "Label": Label(m, prefix), "Places": places, "Creates": creates,
 		"Reload": strings.Join(quoteAll(m.Container.Reload), " "),
 	})
 	return out.Bytes(), err

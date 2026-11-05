@@ -1,0 +1,12 @@
+binary:
+  name: example-proxy
+  release:
+    github: example/proxy
+    version: latest
+    url: proxy-{version}-{target}.tar.gz
+    targets:
+      darwin/arm64: darwin-arm64
+      linux/amd64: linux-amd64
+command: ["{bin}/example-proxy", "--config", "{conf}/proxy.conf"]
+env_files: [proxy.env]
+capabilities: [CAP_NET_BIND_SERVICE]

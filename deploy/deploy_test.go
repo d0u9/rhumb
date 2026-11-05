@@ -22,14 +22,17 @@ func TestDeploy_ImportsNothingElseOfRhumb(t *testing.T) {
 	}
 }
 
+// testDefs holds invented definitions: the tests exercise rhumb, not a program.
+const testDefs = "testdata/services"
+
 func writeExport(t *testing.T) string {
 	t.Helper()
 	src := t.TempDir()
 	os.WriteFile(filepath.Join(src, "config.json"), []byte(`{"local_port": 1080}`), 0o600)
 	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
 node: laptop
-instance: laptop-sea-01-ss-ssserver-json-browser
-service: sslocal
+instance: laptop-sea-01-ss-example-server-json-browser
+service: example-client
 runtime: host
 files:
   - path: config.json
@@ -40,19 +43,19 @@ files:
 func TestBuild_WritesABundleThatKeepsVar(t *testing.T) {
 	src := writeExport(t)
 	dst := filepath.Join(t.TempDir(), "b")
-	fake := filepath.Join(t.TempDir(), "sslocal")
+	fake := filepath.Join(t.TempDir(), "example-client")
 	os.WriteFile(fake, []byte("#!/bin/sh\n"), 0o755)
-	opt := Options{Platform: "darwin/arm64", Binary: fake}
+	opt := Options{Services: testDefs, Platform: "darwin/arm64", Binary: fake}
 	if err := Build(src, dst, opt); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"ctl", "bin/sslocal", "conf/config.json", "manifest.yaml"} {
+	for _, f := range []string{"ctl", "bin/example-client", "conf/config.json", "manifest.yaml"} {
 		if _, err := os.Stat(filepath.Join(dst, f)); err != nil {
 			t.Errorf("bundle lacks %s", f)
 		}
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
-	if !strings.Contains(string(ctl), `set -- "$BIN"'/sslocal' '-c' "$DIR/conf"'/config.json'`) {
+	if !strings.Contains(string(ctl), `set -- "$BIN"'/example-client' '-c' "$DIR/conf"'/config.json'`) {
 		t.Errorf("ctl command line:\n%s", ctl)
 	}
 	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
@@ -84,22 +87,22 @@ func TestBuild_WritesABundleThatKeepsVar(t *testing.T) {
 // service's env files to systemd rather than writing them into the unit.
 func TestBuild_LinuxFromTheManifest(t *testing.T) {
 	src := t.TempDir()
-	os.WriteFile(filepath.Join(src, "server.env"), []byte("MICROBIN_PORT=8080\n"), 0o600)
+	os.WriteFile(filepath.Join(src, "server.env"), []byte("EXAMPLE_PORT=8080\n"), 0o600)
 	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
 node: sea
-instance: microbin-01
-service: microbin
+instance: example-web-01
+service: example-web
 runtime: host
 platform: linux/amd64
 files:
   - path: server.env
 `), 0o600)
 	dst := filepath.Join(t.TempDir(), "b")
-	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+	if err := Build(src, dst, Options{Services: testDefs, Binary: "/bin/sh"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
-	for _, want := range []string{"systemctl", `set -- "$DIR/conf"'/server.env'`, "LABEL=rhumb.sea.microbin-01\n", "DIR='/srv/rhumb/microbin'\n", "copy_in;"} {
+	for _, want := range []string{"systemctl", `set -- "$DIR/conf"'/server.env'`, "LABEL=rhumb.sea.example-web-01\n", "DIR='/srv/rhumb/example-web'\n", "copy_in;"} {
 		if !strings.Contains(string(ctl), want) {
 			t.Errorf("ctl lacks %q:\n%s", want, ctl)
 		}
@@ -107,7 +110,7 @@ files:
 	if !strings.Contains(string(ctl), `echo "CapabilityBoundingSet="`) {
 		t.Error("a unit without capabilities does not drop them all")
 	}
-	if strings.Contains(string(ctl), "MICROBIN_PORT") {
+	if strings.Contains(string(ctl), "EXAMPLE_PORT") {
 		t.Error("ctl carries the env file's contents")
 	}
 	if out, err := exec.Command("sh", "-n", filepath.Join(dst, "ctl")).CombinedOutput(); err != nil {
@@ -118,7 +121,7 @@ files:
 func TestBuild_RefusesAnotherBundlesDirectory(t *testing.T) {
 	dst := t.TempDir()
 	os.WriteFile(filepath.Join(dst, "ctl"), []byte("LABEL=rhumb.other.x\n"), 0o755)
-	err := Build(writeExport(t), dst, Options{Platform: "darwin/arm64", Binary: "/bin/sh"})
+	err := Build(writeExport(t), dst, Options{Services: testDefs, Platform: "darwin/arm64", Binary: "/bin/sh"})
 	if err == nil || !strings.Contains(err.Error(), "another bundle") {
 		t.Fatalf("got %v", err)
 	}
@@ -162,12 +165,12 @@ func TestLeftovers_OnlyWhereTheBundleIsGoneAndItsDiskIsNot(t *testing.T) {
 // written into ctl install.
 func TestBuild_BinarySources(t *testing.T) {
 	for source, want := range map[string]string{
-		"apt: shadowsocks-rust": "apt-get install -y 'shadowsocks-rust'",
-		"path: /opt/ss/sslocal": "BIN='/opt/ss'",
-		"apt: x\n  path: /y":    "",
+		"apt: shadowsocks-rust":        "apt-get install -y 'shadowsocks-rust'",
+		"path: /opt/ss/example-client": "BIN='/opt/ss'",
+		"apt: x\n  path: /y":           "",
 	} {
 		defs := t.TempDir()
-		os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte("binary:\n  name: sslocal\n  "+source+"\ncommand: [\"{bin}/sslocal\"]\n"), 0o644)
+		os.WriteFile(filepath.Join(defs, "example-client.yaml"), []byte("binary:\n  name: example-client\n  "+source+"\ncommand: [\"{bin}/example-client\"]\n"), 0o644)
 		dst := filepath.Join(t.TempDir(), "b")
 		err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs})
 		if want == "" {
@@ -179,7 +182,7 @@ func TestBuild_BinarySources(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%q: %v", source, err)
 		}
-		if _, err := os.Stat(filepath.Join(dst, "bin", "sslocal")); err == nil {
+		if _, err := os.Stat(filepath.Join(dst, "bin", "example-client")); err == nil {
 			t.Errorf("%q: the bundle carries the binary", source)
 		}
 		ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
@@ -207,20 +210,20 @@ func TestRelease_GitHubAssetName(t *testing.T) {
 // looks up "latest" and fetches the platform's archive itself.
 func TestBuild_ReleaseDownloadedOnTheMachine(t *testing.T) {
 	defs := t.TempDir()
-	os.WriteFile(filepath.Join(defs, "sslocal.yaml"), []byte(`binary:
-  name: sslocal
+	os.WriteFile(filepath.Join(defs, "example-client.yaml"), []byte(`binary:
+  name: example-client
   release:
     github: o/r
     version: latest
     url: ss-v{version}-{target}.tar.gz
     targets: {linux/amd64: x86_64}
-command: ["{bin}/sslocal"]
+command: ["{bin}/example-client"]
 `), 0o644)
 	dst := filepath.Join(t.TempDir(), "b")
 	if err := Build(writeExport(t), dst, Options{Platform: "linux/amd64", Services: defs, Download: DownloadInstall}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dst, "bin", "sslocal")); err == nil {
+	if _, err := os.Stat(filepath.Join(dst, "bin", "example-client")); err == nil {
 		t.Error("the bundle carries the binary")
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
@@ -235,29 +238,29 @@ command: ["{bin}/sslocal"]
 }
 
 func TestDescribe(t *testing.T) {
-	m, err := ParseManifest([]byte("schema: 1\nnode: n\ninstance: i\nservice: microbin\nruntime: host\nplatform: linux/amd64\n"))
+	m, err := ParseManifest([]byte("schema: 1\nnode: n\ninstance: i\nservice: example-web\nruntime: host\nplatform: linux/amd64\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := Describe(m, Options{Download: DownloadInstall})
-	if d.Err != nil || d.Manager != "systemd" || d.Platform != "linux/amd64" || d.Binary != "microbin latest release, downloaded on the machine" {
+	d := Describe(m, Options{Services: testDefs, Download: DownloadInstall})
+	if d.Err != nil || d.Manager != "systemd" || d.Platform != "linux/amd64" || d.Binary != "example-web latest release, downloaded on the machine" {
 		t.Fatalf("Describe = %+v", d)
 	}
 	m.Platform = "plan9/386"
-	if Describe(m, Options{}).Err == nil {
+	if Describe(m, Options{Services: testDefs}).Err == nil {
 		t.Fatal("a platform with no service manager described as buildable")
 	}
 }
 
-// Caddy listens below 1024: its unit gives it that capability and no other,
+// A proxy listens below 1024: its unit gives it that capability and no other,
 // and a launchd bundle, with nothing to give it, refuses.
 func TestBuild_Capabilities(t *testing.T) {
 	src := t.TempDir()
-	os.WriteFile(filepath.Join(src, "Caddyfile"), nil, 0o600)
-	os.WriteFile(filepath.Join(src, "caddy.env"), nil, 0o600)
-	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: sea\ninstance: caddy-01\nservice: caddy\nruntime: host\nfiles:\n  - path: Caddyfile\n  - path: caddy.env\n"), 0o600)
+	os.WriteFile(filepath.Join(src, "proxy.conf"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, "proxy.env"), nil, 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: sea\ninstance: example-proxy-01\nservice: example-proxy\nruntime: host\nfiles:\n  - path: proxy.conf\n  - path: proxy.env\n"), 0o600)
 	dst := filepath.Join(t.TempDir(), "b")
-	if err := Build(src, dst, Options{Platform: "linux/amd64", Binary: "/bin/sh"}); err != nil {
+	if err := Build(src, dst, Options{Services: testDefs, Platform: "linux/amd64", Binary: "/bin/sh"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
@@ -266,7 +269,7 @@ func TestBuild_Capabilities(t *testing.T) {
 			t.Errorf("ctl lacks %q", want)
 		}
 	}
-	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
+	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Services: testDefs, Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
 		t.Error("a launchd bundle took capabilities")
 	}
 }
@@ -307,8 +310,8 @@ func TestBuild_SelfSignedOnlyWhereDefined(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "config.yaml"), nil, 0o600)
 	os.WriteFile(filepath.Join(src, ManifestFile), []byte(`schema: 1
 node: n
-instance: hy2-01
-service: hysteria2
+instance: tunnel-01
+service: example-tunnel
 runtime: host
 platform: linux/amd64
 files:
@@ -317,7 +320,7 @@ ports:
   - {name: users, port: 443, published: a.example}
 `), 0o600)
 	dst := filepath.Join(t.TempDir(), "b")
-	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+	if err := Build(src, dst, Options{Services: testDefs, Binary: "/bin/sh"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
@@ -331,9 +334,9 @@ ports:
 func TestBuild_HooksRunAsRootAndOnUninstall(t *testing.T) {
 	src := t.TempDir()
 	os.WriteFile(filepath.Join(src, "config.yaml"), nil, 0o600)
-	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: n\ninstance: h\nservice: hysteria2\nruntime: host\nplatform: linux/amd64\nfiles:\n  - path: config.yaml\n"), 0o600)
+	os.WriteFile(filepath.Join(src, ManifestFile), []byte("schema: 1\nnode: n\ninstance: h\nservice: example-tunnel\nruntime: host\nplatform: linux/amd64\nfiles:\n  - path: config.yaml\n"), 0o600)
 	dst := filepath.Join(t.TempDir(), "b")
-	if err := Build(src, dst, Options{Binary: "/bin/sh"}); err != nil {
+	if err := Build(src, dst, Options{Services: testDefs, Binary: "/bin/sh"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl, _ := os.ReadFile(filepath.Join(dst, "ctl"))
@@ -346,7 +349,7 @@ func TestBuild_HooksRunAsRootAndOnUninstall(t *testing.T) {
 			t.Errorf("ctl lacks %q", want)
 		}
 	}
-	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
+	if err := Build(src, filepath.Join(t.TempDir(), "m"), Options{Services: testDefs, Platform: "darwin/arm64", Binary: "/bin/sh"}); err == nil {
 		t.Error("a launchd bundle took hooks")
 	}
 }

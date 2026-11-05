@@ -1,0 +1,17 @@
+binary:
+  name: example-tunnel
+  release:
+    github: example/tunnel
+    version: latest
+    url: tunnel-{target}
+    targets:
+      darwin/arm64: darwin-arm64
+      linux/amd64: linux-amd64
+command: ["{bin}/example-tunnel", "--config", "{conf}/config.yaml"]
+capabilities: [CAP_NET_BIND_SERVICE]
+self_signed:
+  cert: tls/fullchain.pem
+  key: tls/privkey.pem
+hooks:
+  start: ["{conf}/hopping.sh", "up"]
+  stop: ["{conf}/hopping.sh", "down"]

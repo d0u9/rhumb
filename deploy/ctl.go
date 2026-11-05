@@ -433,8 +433,8 @@ write_unit() {
 		# as an empty bounding set, which keeps none.
 		echo "AmbientCapabilities={{.Capabilities}}"
 		echo "CapabilityBoundingSet={{.Capabilities}}"
-		# State a program keeps under XDG directories, such as Caddy's
-		# certificates, stays in var/ with the rest of it.
+		# State a program keeps under XDG directories, such as a web
+		# server's certificates, stays in var/ with the rest of it.
 		echo "Environment=$(unit_word "XDG_DATA_HOME=$DIR/var/share") $(unit_word "XDG_CONFIG_HOME=$DIR/var/config") $(unit_word "XDG_STATE_HOME=$DIR/var/state") $(unit_word "XDG_CACHE_HOME=$DIR/var/cache")"
 		echo
 		echo "[Install]"
