@@ -119,7 +119,14 @@ start() {
 	launchctl bootstrap "$DOMAIN" "$(plist)"
 }
 
-stop() { if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi; }
+# bootout returns before the service is gone. Wait for it: a start right after
+# would still see it loaded and do nothing, and reload would leave it stopped.
+stop() {
+	loaded || return 0
+	launchctl bootout "$DOMAIN/$LABEL"
+	n=0
+	while loaded && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
+}
 
 status() {
 	if loaded; then

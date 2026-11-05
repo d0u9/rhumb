@@ -826,6 +826,12 @@ On either system install puts nothing on `$PATH`: a bundle's commands, such
 as `singbox.py`, run from its `bin/`, and `ctl link` puts them in
 `~/.local/bin` for whoever wants them there. `ctl unlink` takes them off.
 
+`singbox.py add <link> --group <name>` keeps a long list of outbounds short: the
+outbound goes into a selector of that name, which the web panel shows as a
+group, and `proxy` chooses the group instead. `singbox.py use` takes an outbound
+in a group directly. `singbox.py auto <tag>...` narrows what `auto` tests to those
+outbounds; `singbox.py auto all` goes back to every one.
+
 A device profile that `runs` a program is one instance and one bundle,
 whatever routes it takes; its manifest names the `profile` and the `routes`
 its configuration was rendered with. The export narrows those routes with
