@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// writeHostExport writes a linux host export of service microbin on node
+// writeHostExport writes a linux host export of service example-web on node
 // host-a, with dir written into its manifest when dir is not empty.
 func writeHostExport(t *testing.T, dir string) string {
 	t.Helper()
 	src := t.TempDir()
-	man := "schema: 1\nnode: host-a\ninstance: app-01\nservice: microbin\nruntime: host\nplatform: linux/amd64\n"
+	man := "schema: 1\nnode: host-a\ninstance: app-01\nservice: example-web\nruntime: host\nplatform: linux/amd64\n"
 	if dir != "" {
 		man += "dir: " + dir + "\n"
 	}
@@ -41,11 +41,11 @@ func TestBuild_InstallRoot(t *testing.T) {
 	for _, tc := range []struct {
 		name, dir, root, want string
 	}{
-		{"default", "", "", "DIR='/srv/rhumb/microbin'\n"},
-		{"root", "", "/srv/example", "DIR='/srv/example/microbin'\n"},
+		{"default", "", "", "DIR='/srv/rhumb/example-web'\n"},
+		{"root", "", "/srv/example", "DIR='/srv/example/example-web'\n"},
 		{"manifest dir wins", "/opt/example/app", "/srv/example", "DIR='/opt/example/app'\n"},
 	} {
-		ctl := buildCtl(t, writeHostExport(t, tc.dir), Options{InstallRoot: tc.root})
+		ctl := buildCtl(t, writeHostExport(t, tc.dir), Options{Services: testDefs, InstallRoot: tc.root})
 		if !strings.Contains(ctl, tc.want) {
 			t.Errorf("%s: ctl lacks %q", tc.name, tc.want)
 		}
@@ -53,14 +53,14 @@ func TestBuild_InstallRoot(t *testing.T) {
 }
 
 func TestBuild_InstallRootMustBeAbsolute(t *testing.T) {
-	err := Build(writeHostExport(t, ""), filepath.Join(t.TempDir(), "b"), Options{Binary: "/bin/sh", InstallRoot: "srv/example"})
+	err := Build(writeHostExport(t, ""), filepath.Join(t.TempDir(), "b"), Options{Services: testDefs, Binary: "/bin/sh", InstallRoot: "srv/example"})
 	if err == nil || !strings.Contains(err.Error(), "not absolute") {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestBuild_LabelPrefix(t *testing.T) {
-	ctl := buildCtl(t, writeHostExport(t, ""), Options{LabelPrefix: "example"})
+	ctl := buildCtl(t, writeHostExport(t, ""), Options{Services: testDefs, LabelPrefix: "example"})
 	for _, want := range []string{"LABEL=example.host-a.app-01\n", `UNIT="/etc/systemd/system/$LABEL.service"`} {
 		if !strings.Contains(ctl, want) {
 			t.Errorf("ctl lacks %q", want)
@@ -69,7 +69,7 @@ func TestBuild_LabelPrefix(t *testing.T) {
 	if strings.Contains(ctl, "LABEL=rhumb.") {
 		t.Error("ctl still carries the default prefix")
 	}
-	err := Build(writeHostExport(t, ""), filepath.Join(t.TempDir(), "b"), Options{Binary: "/bin/sh", LabelPrefix: "a b"})
+	err := Build(writeHostExport(t, ""), filepath.Join(t.TempDir(), "b"), Options{Services: testDefs, Binary: "/bin/sh", LabelPrefix: "a b"})
 	if err == nil || !strings.Contains(err.Error(), "label prefix") {
 		t.Fatalf("a prefix with a space: got %v", err)
 	}
@@ -102,7 +102,7 @@ func TestBuild_Relabel(t *testing.T) {
 		man, _ := os.ReadFile(filepath.Join(src, ManifestFile))
 		os.WriteFile(filepath.Join(src, ManifestFile), []byte(strings.Replace(string(man), "linux/amd64", platform, 1)), 0o600)
 		defs := t.TempDir()
-		os.WriteFile(filepath.Join(defs, "microbin.yaml"), []byte("binary:\n  name: microbin\n  path: /opt/example/bin/microbin\ncommand: [microbin]\n"), 0o644)
+		os.WriteFile(filepath.Join(defs, "example-web.yaml"), []byte("binary:\n  name: example-web\n  path: /opt/example/bin/example-web\ncommand: [example-web]\n"), 0o644)
 		opt.Binary, opt.Services = "/bin/sh", defs
 		return Build(src, dst, opt)
 	}
@@ -118,7 +118,7 @@ func TestBuild_Relabel(t *testing.T) {
 	} {
 		dst := t.TempDir()
 		os.WriteFile(filepath.Join(dst, "ctl"), []byte("#!/bin/sh\nLABEL="+tc.old+"\n"), 0o755)
-		err := build(dst, tc.platform, Options{LabelPrefix: "example", Relabel: tc.relabel})
+		err := build(dst, tc.platform, Options{Services: testDefs, LabelPrefix: "example", Relabel: tc.relabel})
 		if tc.ok != (err == nil) {
 			t.Errorf("%s: err = %v", tc.name, err)
 		}
@@ -133,7 +133,7 @@ func TestBuild_Tool(t *testing.T) {
 		t.Run(platform, func(t *testing.T) {
 			src := writeHostExport(t, "")
 			defs := t.TempDir()
-			if err := os.WriteFile(filepath.Join(defs, "microbin.yaml"), []byte("binary:\n  name: microbin\n  path: /opt/example/bin/microbin\ncommand: [microbin]\n"), 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(defs, "example-web.yaml"), []byte("binary:\n  name: example-web\n  path: /opt/example/bin/example-web\ncommand: [example-web]\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			defaults := buildCtl(t, src, Options{Platform: platform, Services: defs})
@@ -166,7 +166,7 @@ func TestBuild_Tool(t *testing.T) {
 		t.Fatalf("docker tool: %v", err)
 	}
 	for _, tool := range []string{"a b", "a\nb", "$(id)", "a.b"} {
-		err := Build(src, filepath.Join(t.TempDir(), "b"), Options{Platform: "linux/amd64", Tool: tool})
+		err := Build(src, filepath.Join(t.TempDir(), "b"), Options{Services: testDefs, Platform: "linux/amd64", Tool: tool})
 		if err == nil || !strings.Contains(err.Error(), "tool") {
 			t.Fatalf("tool %q: err = %v, want a tool error", tool, err)
 		}
@@ -214,7 +214,7 @@ func TestCtl_ToolLinkAndUnlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := writeHostExport(t, "")
-	if err := os.WriteFile(filepath.Join(defs, "microbin.yaml"), []byte("binary:\n  name: microbin\n  path: /opt/example/bin/microbin\ncommand: [microbin]\nexpose: [demo]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(defs, "example-web.yaml"), []byte("binary:\n  name: example-web\n  path: /opt/example/bin/example-web\ncommand: [example-web]\nexpose: [demo]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := Build(src, dst, Options{Platform: "darwin/arm64", Binary: "/bin/sh", Services: defs, Tool: "example", LabelPrefix: "example"}); err != nil {

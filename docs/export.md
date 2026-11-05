@@ -822,15 +822,9 @@ otherwise, and install only puts the program in place: nothing starts. `ctl star
 `ctl enable` makes it a LaunchAgent that starts at every login, and `ctl
 disable` takes that back. Either way launchd restarts it when it exits.
 
-On either system install puts nothing on `$PATH`: a bundle's commands, such
-as `singbox.py`, run from its `bin/`, and `ctl link` puts them in
+On either system install puts nothing on `$PATH`: a bundle's commands run
+from its `bin/`, and `ctl link` puts them in
 `~/.local/bin` for whoever wants them there. `ctl unlink` takes them off.
-
-`singbox.py add <link> --group <name>` keeps a long list of outbounds short: the
-outbound goes into a selector of that name, which the web panel shows as a
-group, and `proxy` chooses the group instead. `singbox.py use` takes an outbound
-in a group directly. `singbox.py auto <tag>...` narrows what `auto` tests to those
-outbounds; `singbox.py auto all` goes back to every one.
 
 A device profile that `runs` a program is one instance and one bundle,
 whatever routes it takes; its manifest names the `profile` and the `routes`
@@ -848,9 +842,10 @@ same node and instance. A macOS bundle is refused even then: it is installed
 where it is, and its launchd entry under the old label would be left behind, so
 `ctl uninstall` it first.
 
-A definition may ship files beside its YAML, in `services/<name>/`; they are
-put in the bundle's `bin/`. A definition read from `--services <dir>` ships
-`<dir>/<name>/` instead, and none of the built-in files. `requires` names programs the machine must have,
+rhumb holds no service definitions: `--services <dir>` names the directory of
+them, `<name>.yaml` each, and a service without one there is refused. A
+definition may ship files in `<dir>/<name>/`; they are put in the bundle's
+`bin/`. `requires` names programs the machine must have,
 which install checks for; a launchd plist keeps the `$PATH` it was written
 with, so a program found through a version manager is found again. A release
 whose binary is not at the top of its archive names it with `member`.

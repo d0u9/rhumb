@@ -20,8 +20,7 @@ import (
 type Options struct {
 	// Platform is the target's GOOS/GOARCH, this machine's when empty.
 	Platform string
-	// Services is a directory of service definitions consulted before the
-	// built-in ones.
+	// Services is the directory of service definitions; rhumb has none.
 	Services string
 	// Binary is a local program to bundle instead of what the source
 	// would give, for a machine with no network or a build of one's own.

@@ -1,0 +1,11 @@
+binary:
+  name: example-web
+  release:
+    github: example/web
+    version: latest
+    url: web-{version}-{target}.tar.gz
+    targets:
+      darwin/arm64: darwin-arm64
+      linux/amd64: linux-amd64
+command: ["{bin}/example-web"]
+env_files: [server.env]

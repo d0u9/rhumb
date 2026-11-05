@@ -1,0 +1,11 @@
+binary:
+  name: example-client
+  release:
+    github: example/client
+    version: 1.0.0
+    url: client-{version}.{target}.tar.gz
+    targets:
+      darwin/arm64: darwin-arm64
+      linux/amd64: linux-amd64
+command: ["{bin}/example-client", "-c", "{conf}/config.json"]
+expose: [example-client]

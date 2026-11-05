@@ -3,6 +3,7 @@ package deploy
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -39,26 +40,10 @@ func TestShippedReadsAnExternalDefinitionsOwnFiles(t *testing.T) {
 	}
 }
 
-func TestShippedDoesNotMixInBuiltinFiles(t *testing.T) {
-	builtinFiles, err := shipped("singbox", "")
-	if err != nil || len(builtinFiles) == 0 {
-		t.Fatalf("built-in singbox ships %v, %v; the test needs some", builtinFiles, err)
-	}
-	dir := t.TempDir()
-	writeDef(t, dir, "singbox", map[string]string{"own.txt": "example.com\n"})
-	got, err := shipped("singbox", dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 1 || string(got["own.txt"]) != "example.com\n" {
-		t.Fatalf("shipped = %v, want only own.txt", got)
-	}
-}
-
 func TestShippedWithoutAFilesDirectoryIsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	writeDef(t, dir, "singbox", nil)
-	got, err := shipped("singbox", dir)
+	writeDef(t, dir, "example", nil)
+	got, err := shipped("example", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,16 +52,11 @@ func TestShippedWithoutAFilesDirectoryIsEmpty(t *testing.T) {
 	}
 }
 
-func TestShippedFallsBackToBuiltinWhenDirLacksTheDefinition(t *testing.T) {
-	want, err := shipped("singbox", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := shipped("singbox", t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != len(want) {
-		t.Fatalf("shipped = %d files, want the %d built in", len(got), len(want))
+func TestLoadServiceWithoutADefinition(t *testing.T) {
+	for _, dir := range []string{"", t.TempDir()} {
+		_, err := LoadService("example", dir)
+		if err == nil || !strings.Contains(err.Error(), `service "example" has no deploy definition`) {
+			t.Fatalf("dir %q: got %v", dir, err)
+		}
 	}
 }

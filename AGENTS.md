@@ -25,6 +25,21 @@ data in this repository, even temporarily or in an untracked or ignored file.**
   alternative. If private data is found, stop propagating it and report without
   quoting it. Deleting it in a later commit does not undo disclosure.
 
+## No concrete services — mandatory
+
+**rhumb is a public, general tool. It does not know what its users deploy.
+Never add a concrete service to rhumb: no deploy definition, shipped script,
+template, embedded asset or special case for a named program, in the binary or
+anywhere else in the repository.**
+
+- The only exceptions are `examples/` and tests. Both stay synthetic, and
+  nothing in them is embedded in the binary.
+- Tests exercise rhumb's own behavior, never the deployment of a specific
+  service. A test needing a service uses an invented definition, such as
+  `deploy/testdata/services/`.
+- Definitions a user deploys live in that user's configuration, read through
+  `--services <dir>`. Nothing falls back to a definition inside rhumb.
+
 ## Project and boundaries
 
 - Go library and `cmd/rhumb` CLI. `engine` loads and renders without writing;

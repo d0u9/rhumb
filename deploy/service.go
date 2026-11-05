@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -119,26 +118,14 @@ func (s Sources) Names() []string {
 	return out
 }
 
-// builtin holds rhumb's definitions, services/<name>.yaml, and beside each
-// the files it ships in bin/, services/<name>/.
-//
-
-var builtin embed.FS
-
 // shipped is the files a definition puts in bin/ beside the program, by
-// name. They come from where LoadService(name, dir) reads the definition:
-// <dir>/<name>/ for a definition dir holds, with nothing from rhumb's own,
-// and services/<name>/ built in otherwise. Subdirectories are skipped.
+// name: what <dir>/<name>/ holds. Subdirectories are skipped.
 func shipped(name, dir string) (map[string][]byte, error) {
-	fsys, root := fs.FS(builtin), "services/"+name
-	if dir != "" {
-		if _, err := os.Stat(filepath.Join(dir, name+".yaml")); err == nil {
-			fsys, root = os.DirFS(dir), name
-		} else if !errors.Is(err, fs.ErrNotExist) {
-			return nil, err
-		}
+	if dir == "" {
+		return nil, nil
 	}
-	entries, err := fs.ReadDir(fsys, root)
+	root := filepath.Join(dir, name)
+	entries, err := os.ReadDir(root)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -150,7 +137,7 @@ func shipped(name, dir string) (map[string][]byte, error) {
 		if e.IsDir() {
 			continue
 		}
-		data, err := fs.ReadFile(fsys, root+"/"+e.Name())
+		data, err := os.ReadFile(filepath.Join(root, e.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -159,21 +146,19 @@ func shipped(name, dir string) (map[string][]byte, error) {
 	return out, nil
 }
 
-// LoadService reads name's definition from dir when dir is given and holds
-// one, and from the definitions built into rhumb otherwise.
+// LoadService reads name's definition, <dir>/<name>.yaml. rhumb holds no
+// definition of its own: what a user deploys is the user's to define.
 func LoadService(name, dir string) (Service, error) {
 	var s Service
-	file := name + ".yaml"
-	data, err := fs.ReadFile(builtin, "services/"+file)
-	if dir != "" {
-		if own, ownErr := os.ReadFile(filepath.Join(dir, file)); ownErr == nil {
-			data, err = own, nil
-		} else if !errors.Is(ownErr, fs.ErrNotExist) {
-			return s, ownErr
-		}
+	if dir == "" {
+		return s, fmt.Errorf("service %q has no deploy definition: no definitions directory was given", name)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name+".yaml"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return s, fmt.Errorf("service %q has no deploy definition in %s", name, dir)
 	}
 	if err != nil {
-		return s, fmt.Errorf("service %q has no deploy definition", name)
+		return s, err
 	}
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
