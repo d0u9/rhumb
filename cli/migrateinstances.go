@@ -46,8 +46,9 @@ func parseInstanceChanges(encoded string) ([]instanceChange, error) {
 	return changes, nil
 }
 
-// renameMigrationInstances changes authored IDs and typed route-hop and dial references
-// in the preview snapshot. Opaque values, paths and secrets remain manual work.
+// renameMigrationInstances changes authored IDs, process members and typed
+// route-hop and dial references in the preview snapshot. Opaque values,
+// paths and secrets remain manual work.
 func renameMigrationInstances(inv *inventory.Root, nodeIndex int, changes []instanceChange) (map[string][]string, error) {
 	refs := map[string][]string{}
 	if len(changes) == 0 {
@@ -83,6 +84,15 @@ func renameMigrationInstances(inv *inventory.Root, nodeIndex int, changes []inst
 		if to := changesByID[node.Instances[i].ID]; to != "" {
 			node.Instances[i].ID = to
 			node.Instances[i].Name = inventory.LocalName(to)
+		}
+		if len(node.Instances[i].Members) > 0 {
+			members := append([]string(nil), node.Instances[i].Members...)
+			for j, member := range members {
+				if to := changesByID[member]; to != "" {
+					members[j] = to
+				}
+			}
+			node.Instances[i].Members = members
 		}
 	}
 	// A dial names its target the way a hop does, and may live on any node.
@@ -165,6 +175,13 @@ func renameMigrationNode(inv *inventory.Root, nodeIndex int, oldID, newID string
 	node.Instances = append([]inventory.Instance(nil), node.Instances...)
 	for i := range node.Instances {
 		node.Instances[i].ID = newID + inventory.QualifiedSep + inventory.LocalName(node.Instances[i].ID)
+		if len(node.Instances[i].Members) > 0 {
+			members := append([]string(nil), node.Instances[i].Members...)
+			for j, member := range members {
+				members[j] = newID + inventory.QualifiedSep + inventory.LocalName(member)
+			}
+			node.Instances[i].Members = members
+		}
 	}
 	inv.Nodes = append([]inventory.Node(nil), inv.Nodes...)
 	for n := range inv.Nodes {
@@ -212,6 +229,9 @@ func renameMigrationNode(inv *inventory.Root, nodeIndex int, oldID, newID string
 }
 
 func cloneRoutes(routes map[string]inventory.Route) map[string]inventory.Route {
+	if routes == nil {
+		return nil
+	}
 	copyOf := make(map[string]inventory.Route, len(routes))
 	for name, route := range routes {
 		copyOf[name] = inventory.Route{Hops: append([]string(nil), route.Hops...), Scope: route.Scope}

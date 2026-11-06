@@ -2,6 +2,7 @@ package derive
 
 import (
 	"net"
+	"net/netip"
 
 	"github.com/d0u9/rhumb/inventory"
 )
@@ -193,13 +194,16 @@ func (m *Model) Mappings(inv *inventory.Root, instance string) map[string]Mappin
 
 // collapse is the addresses a port actually binds: PublishEverywhere alone
 // when it is among them, since it already covers every interface and a
-// second bind on one of them would fail; the list deduplicated and in the
+// second bind on one of them would fail; IPs normalized, deduplicated and in the
 // order given otherwise; and nothing when nothing asked for an address,
 // which is a port entered only from its own container network.
 func collapse(addresses []string) []string {
 	out := make([]string, 0, len(addresses))
 	seen := map[string]bool{}
 	for _, address := range addresses {
+		if ip, err := netip.ParseAddr(address); err == nil {
+			address = ip.Unmap().String()
+		}
 		if address == PublishEverywhere {
 			return []string{PublishEverywhere}
 		}
