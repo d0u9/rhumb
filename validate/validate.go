@@ -16,9 +16,11 @@ package validate
 
 import (
 	"fmt"
+	"maps"
 	"net/netip"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -538,7 +540,7 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 	// process joins none. A node's `containers` names no network twice, each
 	// with a subnet that overlaps no other of the node's, and a gateway,
 	// when written, inside it. A fixed address sits inside its network's
-	// subnet, is not its gateway, and is held by one instance.
+	// subnet, is not its gateway, and is held by one runtime process.
 	for _, nodeID := range nodeIDsInOrder {
 		n := nodeByID[nodeID]
 		seen := map[string]bool{}
@@ -572,10 +574,13 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			names = append(names, c.Name)
 		}
 	}
-	held := map[string]string{}
+	held := map[[3]string][]string{}
 	for _, id := range realIDs {
 		ref := realInstances[id]
 		inst := ref.inst
+		if len(inst.Members) > 0 {
+			continue // the process copies its members' container facts, not another claim.
+		}
 		if !inst.Containerised() {
 			if len(inst.Containers) > 0 {
 				add("instance %q runs as a %s process and names container networks %s: only a container joins one",
@@ -611,14 +616,22 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 			if prefix, err := netip.ParsePrefix(c.Subnet); err == nil && !prefix.Contains(a) {
 				add("instance %q: address %s on container network %q is outside its subnet %s", id, address, name, c.Subnet)
 			}
-			if c.Gateway != "" && c.Gateway == address {
+			if c.Gateway != "" && canonicalAddress(c.Gateway) == canonicalAddress(address) {
 				add("instance %q: address %s on container network %q is the network's gateway", id, address, name)
 			}
-			key := ref.nodeID + "|" + name + "|" + a.String()
-			if other, ok := held[key]; ok {
-				add("instances %q and %q both hold %s on container network %q", other, id, address, name)
+			owner := id
+			if _, declared := node.Processes[inst.Process]; inst.Process != "" && declared {
+				owner = ref.nodeID + inventory.QualifiedSep + inst.Process
 			}
-			held[key] = id
+			key := [3]string{ref.nodeID, name, canonicalAddress(address)}
+			owners := held[key]
+			if slices.Contains(owners, owner) {
+				continue
+			}
+			if len(owners) > 0 {
+				add("instances %q and %q both hold %s on container network %q", owners[0], owner, address, name)
+			}
+			held[key] = append(owners, owner)
 		}
 	}
 
@@ -1372,7 +1385,7 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 					binds = mappings[portName].Addresses
 				}
 				for _, bind := range binds {
-					b := bound{bind: bind, port: port.Number, protocol: port.ProtocolOr()}
+					b := bound{bind: canonicalAddress(bind), port: port.Number, protocol: port.ProtocolOr()}
 					seen[b] = append(seen[b], fmt.Sprintf("%s:%s", inst.ID, portName))
 				}
 			}
@@ -1392,9 +1405,25 @@ func Validate(inv *inventory.Root, manifests map[string]confgen.Manifest, export
 		})
 		for _, b := range bounds {
 			names := seen[b]
+			sort.Strings(names)
 			if len(names) > 1 {
-				sort.Strings(names)
 				add("node %q: %s bind the same address, port and protocol (%s:%d/%s)", nodeID, strings.Join(names, ", "), b.bind, b.port, b.protocol)
+			}
+			// Empty binds keep service defaults. Only compare explicit addresses
+			// within one family; IPv6 dual-stack socket policy is not modeled.
+			ip, err := netip.ParseAddr(b.bind)
+			if err != nil || ip.IsUnspecified() || ip.Zone() != "" {
+				continue
+			}
+			wildcard := b
+			wildcard.bind = "::"
+			if ip.Is4() {
+				wildcard.bind = "0.0.0.0"
+			}
+			if others := seen[wildcard]; len(others) > 0 {
+				sort.Strings(others)
+				add("node %q: %s and %s bind overlapping addresses on port %d/%s (%s and %s)",
+					nodeID, strings.Join(names, ", "), strings.Join(others, ", "), b.port, b.protocol, b.bind, wildcard.bind)
 			}
 		}
 	}
@@ -1483,9 +1512,13 @@ func processIssues(inv *inventory.Root, manifests map[string]confgen.Manifest) [
 			}
 			numbers := map[bound]string{}
 			for _, mb := range members {
-				if mb.RuntimeOr() != first.RuntimeOr() || mb.Bind != first.Bind ||
+				if mb.RuntimeOr() != first.RuntimeOr() || canonicalAddress(mb.Bind) != canonicalAddress(first.Bind) ||
 					strings.Join(mb.ContainerNames(), ",") != strings.Join(first.ContainerNames(), ",") {
 					add("process %q: %s and %s differ in runtime, bind or container networks, which one program shares", id, first.ID, mb.ID)
+				} else if !maps.EqualFunc(mb.Containers, first.Containers, func(a, b string) bool {
+					return canonicalAddress(a) == canonicalAddress(b)
+				}) {
+					add("process %q: %s and %s differ in container addresses, which one program shares", id, first.ID, mb.ID)
 				}
 				for port, p := range mb.Ports {
 					if other, ok := ports[port]; ok {

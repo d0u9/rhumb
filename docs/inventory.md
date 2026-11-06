@@ -818,6 +818,13 @@ they listen in one place.
 `bind` is optional and defaults from the service's defaults file. A server binds
 every interface; a client's local listener binds loopback.
 
+Rule 14 normalizes explicit IP binds and rejects equal addresses or a wildcard
+overlapping a specific address in the same IP family, on the same node, port
+and protocol. It also checks derived host mappings for containers. It does not
+resolve service defaults: two empty binds retain the existing duplicate-bind
+check, but an empty bind is not assumed to cover an explicit address. IPv6
+dual-stack socket options and runtime listeners are outside this check.
+
 A port named `self` is rejected; see [Secrets](#secrets).
 
 ### The name a port is published at
@@ -1096,6 +1103,10 @@ that creates it, and after every time it is removed and created again. An
 address fixed on the network is only fixed if its range is, so `subnet` is
 required. `gateway` is optional; written, it lies inside the subnet, and no
 instance holds it. Two of a node's container networks may not overlap.
+Host-interface subnets are not compared with container subnets: a host interface
+may be the gateway interface of that same container bridge. The inventory does
+not identify that relationship, so overlapping prefixes alone cannot establish
+an error. Checks between these scopes remain undecided.
 
 A containerised instance joins the first unless it writes `containers`, a
 mapping from each network it joins to the address it holds there:
@@ -1108,7 +1119,10 @@ containers:
 
 A network written with no address is joined with one the runtime assigns. A
 written address is fixed: it lies inside the network's subnet, is not its
-gateway, and no other instance on the node holds it there. Fix one when
+gateway, and no other runtime process on the node holds it there. Members of
+one declared process share that container and must agree on its fixed addresses,
+including whether an address is left to the runtime. IP comparisons normalize
+equivalent spellings. Fix one when
 something outside the model dials the container by address — a router
 forwarding into the network, or a record naming it — and leave it to the
 runtime otherwise, since every dial the model makes is by name. Every network
@@ -1319,6 +1333,10 @@ access name must not become a self-CNAME. With `203.0.113.10` as the
 endpoint they become A records; with `2001:db8::10`, AAAA. No interface or MAC
 is required for an access endpoint. Existing proxy selection still determines
 which machine answers a published service name.
+
+Rule 30 compares records within each network table. Rule 18 separately checks
+the primary published name (the first entry) globally: two nodes cannot declare
+that same primary name even if their DNS tables belong to different networks.
 
 `rhumb --root <root> dns internet` writes deterministic JSON to stdout:
 
@@ -2760,7 +2778,11 @@ failing can be told which level it was reading.
 13. Account names rendered for one port are distinct. On a service naming
     accounts by person, this is what two of one person's credentials on the
     same port fail.
-14. Two instances on one node do not bind the same address, port and protocol.
+14. Two instances on one node do not bind the same address, port and protocol,
+    or a wildcard and a specific address of the same IP family on that port and
+    protocol. Explicit IPs are normalized before comparison; empty binds keep
+    their existing service-default semantics, and no cross-family dual-stack
+    socket behavior is inferred.
     A container on a container network binds in its own network namespace,
     so what it holds on the node is the host mapping derived for it, and a
     port published on no host address holds nothing.
@@ -2771,7 +2793,8 @@ failing can be told which level it was reading.
     declares `published`.
     Without it the proxy has nothing to tell one downstream from another, and
     the error names the instance and the route.
-18. Two ports declaring the same `published` name are on one node, neither is
+18. Two ports declaring the same primary `published` name (the first entry)
+    are on one node, neither is
     fronted by a `downstreams: many` instance dispatching by `name`, and they
     differ in number or transport. The error names both. A relay dispatching
     by `port` matches no name, so it fronts nothing in this sense.
@@ -2824,21 +2847,30 @@ failing can be told which level it was reading.
     bindings and local interface/address references must exist; one host binds
     at most one node. Inventory identifiers never infer DNS names.
 30. On one network, and on one node's container network, a DNS name has one
-    record. Interface names, device references, published names and optional
+    record. Identical records requested by different published ports merge;
+    repeating a name within one port is an error. On physical networks,
+    interface names, device references, published names and optional
     aliases form a same-network graph with explicit external endpoint terminals:
     no missing internal targets, cycles or chains
     beyond 8 CNAME hops. Device names reference at most one address per network;
     references must exist and the address must have names. Conflicts name both
-    sources. See [names on a network](#names-on-a-network).
+    sources. Container tables contain only published records derived from fixed
+    container IPs; physical interface/device names and aliases do not enter them.
+    The separate global restriction of rule 18 still applies to primary published
+    names. See [names on a network](#names-on-a-network).
 31. Every `dials` value names an existing instance and an existing port on
     it, not the dialling instance itself, and the two ends resolve an address
     as rule 10 requires of an edge.
 32. A containerised instance binds `0.0.0.0` or writes no bind, and every
     network in its `containers` is one its node lists. A host process names
     none. A node lists no container network twice; each has a subnet that is
-    a CIDR prefix and overlaps no other of the node's, and a gateway, when
-    written, inside it. An address fixed on a container network is inside
-    its subnet, is not its gateway, and is held by one instance.
+    a CIDR prefix and overlaps no other container network of the node's.
+    Host-interface subnets are not compared: the interface may belong to that
+    same bridge. A gateway, when written, is inside the container subnet.
+    An address fixed on a container network is inside its subnet, is not its
+    gateway, and is held by one runtime process. Members of the same declared
+    process share its claim. Address equality normalizes IP spellings, and each
+    runtime owner participates once per node, container network and address.
 33. A route's scope names a network, a node, or a container network of its
     entry's node, and no container network, network or node shares a name
     with another; its entry has an address on that network, runs on that
@@ -2864,8 +2896,10 @@ failing can be told which level it was reading.
 42. An instance's `process` names one of its node's `processes`; every process
     names a service that renders, has at least one member, and does not
     share a name with an instance on its node.
-43. A process's members share a runtime, a bind and container networks, and
-    their port names and their numbers on each protocol are distinct.
+43. A process's members share a runtime, a bind and container networks, including
+    the same fixed addresses or runtime allocation on each network. IP spellings
+    are normalized for equality. Their port names and their numbers on each
+    protocol are distinct.
 
 Rules 37 to 41 are explained in [links.md](links.md#validation).
 
