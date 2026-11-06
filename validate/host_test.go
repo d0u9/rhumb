@@ -67,3 +67,67 @@ func TestHostIssuesBinding(t *testing.T) {
 		t.Fatalf("unsafe host ID: %s", got)
 	}
 }
+
+// Rule 28: on one network an IP has one address declaration and a MAC one
+// interface, however many hosts are involved.
+func TestNetworkIssuesRule28(t *testing.T) {
+	type ifaces = map[string]inventory.Interface
+	type addrs = map[string]inventory.InterfaceAddress
+	iface := func(mac, network, ip string) inventory.Interface {
+		return inventory.Interface{MAC: mac, Addresses: addrs{"a": {Network: network, IP: ip}}}
+	}
+	const macA, macB, macC = "02:00:00:00:00:01", "02:00:00:00:00:02", "02:00:00:00:00:03"
+	for _, tc := range []struct {
+		name  string
+		hosts map[string]inventory.Host
+		want  string
+	}{
+		{"an IP on two hosts", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macA, "lan", "10.0.0.1")}},
+			"host-b": {Interfaces: ifaces{"eth0": iface(macB, "lan", "10.0.0.1")}},
+		}, "address 10.0.0.1 is held by"},
+		{"an IP on two interfaces of one host", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macA, "lan", "10.0.0.1"), "eth1": iface(macB, "lan", "10.0.0.1")}},
+		}, "address 10.0.0.1 is held by"},
+		{"an IP twice on one interface", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": {MAC: macA, Addresses: addrs{
+				"a": {Network: "lan", IP: "10.0.0.1"}, "b": {Network: "lan", IP: "10.0.0.1"},
+			}}}},
+		}, "address 10.0.0.1 is held by"},
+		{"one IPv6 address written two ways", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macA, "lan", "2001:db8::1")}},
+			"host-b": {Interfaces: ifaces{"eth0": iface(macB, "lan", "2001:0db8:0::1")}},
+		}, "address 2001:db8::1 is held by"},
+		{"a MAC on two hosts", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macA, "lan", "10.0.0.1")}},
+			"host-b": {Interfaces: ifaces{"eth0": iface(macA, "lan", "10.0.0.2")}},
+		}, "mac " + macA + " is held by"},
+		{"a MAC on two interfaces of one host", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macA, "lan", "10.0.0.1"), "eth1": iface(macA, "lan", "10.0.0.2")}},
+		}, "mac " + macA + " is held by"},
+		{"one MAC written two ways", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface("02:00:00:00:00:0A", "lan", "10.0.0.1")}},
+			"host-b": {Interfaces: ifaces{"eth0": iface("02-00-00-00-00-0a", "lan", "10.0.0.2")}},
+		}, "mac 02:00:00:00:00:0a is held by"},
+		{"several IPs sharing one interface's MAC", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": {MAC: macA, Addresses: addrs{
+				"a": {Network: "lan", IP: "10.0.0.1"}, "b": {Network: "lan", IP: "10.0.0.2"},
+			}}}},
+		}, ""},
+		{"one IP and one MAC on two networks", map[string]inventory.Host{
+			"host-a": {Interfaces: ifaces{"eth0": iface(macC, "lan", "10.0.0.1")}},
+			"host-b": {Interfaces: ifaces{"eth0": iface(macC, "wan", "10.0.0.1")}},
+		}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inv := &inventory.Root{Networks: []string{"lan", "wan"}, Hosts: tc.hosts}
+			got := strings.Join(networkIssues(inv, nil, func(string) bool { return false }), "\n")
+			if tc.want == "" && strings.Contains(got, "held by") {
+				t.Fatalf("unexpected conflict: %s", got)
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
