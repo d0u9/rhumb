@@ -625,3 +625,51 @@ func TestImpliedPaths_LinkPort(t *testing.T) {
 		t.Fatalf("after rename, paths = %v, want %v", got, want)
 	}
 }
+
+func TestFileValueDropsCommentsAfterTheFirstLine(t *testing.T) {
+	cases := map[string]struct{ file, want string }{
+		"empty":                {"", ""},
+		"no newline":           {"value", "value"},
+		"trailing newline":     {"value\n", "value"},
+		"first line is value":  {"#value\n", "#value"},
+		"comment":              {"value\n# note\n", "value"},
+		"blank before comment": {"value\n\n# note\n", "value"},
+		"hash value, comment":  {"#value\n# note", "#value"},
+		"multi-line value":     {"a\nb\n# note\nc\n", "a\nb\nc"},
+		"hash inside a line":   {"a#b\nc # d\n", "a#b\nc # d"},
+	}
+	for name, c := range cases {
+		if got := fileValue([]byte(c.file)); got != c.want {
+			t.Errorf("%s: fileValue(%q) = %q, want %q", name, c.file, got, c.want)
+		}
+	}
+}
+
+func TestReadersDropComments(t *testing.T) {
+	root := t.TempDir()
+	p := Path{Instance: "node-1/ss-01", Port: "users", Group: "alice", Name: "default"}
+	self := filepath.Join(root, "node-1/ss-01", SelfPort, "web_password_hash")
+	for path, content := range map[string]string{
+		filepath.Join(root, p.String()):                  "current\n# note\n",
+		filepath.Join(root, p.String()) + PreviousSuffix: "old\n# note\n",
+		self: "hash\n# note\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got, err := ReadValue(root, p); err != nil || got != "current" {
+		t.Errorf("ReadValue = %q, %v", got, err)
+	}
+	if got, ok, err := ReadPrevious(root, p); err != nil || !ok || got != "old" {
+		t.Errorf("ReadPrevious = %q, %v, %v", got, ok, err)
+	}
+	own, err := ReadSelf(root, "node-1/ss-01")
+	if err != nil || own["web_password_hash"] != "hash" {
+		t.Errorf("ReadSelf = %v, %v", own, err)
+	}
+}
