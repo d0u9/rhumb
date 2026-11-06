@@ -382,13 +382,28 @@ func randomPrintable(length int) (string, error) {
 	return b.String(), nil
 }
 
-// ReadValue reads one secret's value, trimmed of a trailing newline if any.
+// fileValue is the value a secret file holds. The first line is always value,
+// even when it starts with "#": a password may. A later line starting with "#"
+// is a comment for whoever opens the file, and never reaches a render. Trailing
+// newlines are not part of the value.
+func fileValue(data []byte) string {
+	first, rest, _ := strings.Cut(string(data), "\n")
+	kept := []string{first}
+	for _, line := range strings.Split(rest, "\n") {
+		if !strings.HasPrefix(line, "#") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.TrimRight(strings.Join(kept, "\n"), "\n")
+}
+
+// ReadValue reads one secret's value: see fileValue.
 func ReadValue(root string, p Path) (string, error) {
 	data, err := os.ReadFile(filepath.Join(root, p.String()))
 	if err != nil {
 		return "", fmt.Errorf("secretstore: reading %s: %w", p, err)
 	}
-	return strings.TrimSuffix(string(data), "\n"), nil
+	return fileValue(data), nil
 }
 
 // ReadPrevious reads a secret's previous value — its <name>.previous
@@ -404,7 +419,7 @@ func ReadPrevious(root string, p Path) (value string, ok bool, err error) {
 		}
 		return "", false, fmt.Errorf("secretstore: reading %s: %w", full, err)
 	}
-	return strings.TrimSuffix(string(data), "\n"), true, nil
+	return fileValue(data), true, nil
 }
 
 // PreviousModTimes finds every .previous file under root and returns its
@@ -487,7 +502,7 @@ func ReadSelf(root, instance string) (map[string]any, error) {
 		if err != nil {
 			return err
 		}
-		put(self, strings.Split(filepath.ToSlash(rel), "/"), strings.TrimSuffix(string(data), "\n"))
+		put(self, strings.Split(filepath.ToSlash(rel), "/"), fileValue(data))
 		return nil
 	})
 	if err != nil && !os.IsNotExist(err) {

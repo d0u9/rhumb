@@ -2173,6 +2173,16 @@ readable and writable with `cat` and a redirect outlives any tool built to read
 it. Whatever rhumb grows to make this more convenient, `find`, `cat` and
 `printf` keep working.
 
+A file can carry notes for whoever opens it, such as the password behind a
+stored hash. The first line is always value, even when it starts with `#`; any
+later line starting with `#` is a comment and never reaches a render. Trailing
+newlines are not part of the value:
+
+```text
+$2y$10$examplehashexamplehashexamplehash
+# plaintext: correct-horse
+```
+
 ### Viewing and editing several at once
 
 Seeing every credential an instance holds today means opening each file in
