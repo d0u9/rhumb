@@ -328,6 +328,15 @@ func TestExamples_ServiceWritingSeveralFilesRendersEachOne(t *testing.T) {
 	if !strings.HasPrefix(table, "alice:3001:") {
 		t.Errorf("rendered smbpasswd does not open with the account and its uid:\n%s", table)
 	}
+	// Samba parses each line by position: no LM hash, an uppercase NT hash,
+	// the flags of an enabled account and a nonzero change time.
+	for _, line := range strings.Split(strings.TrimSpace(table), "\n") {
+		f := strings.Split(line, ":")
+		if len(f) != 7 || f[2] != strings.Repeat("X", 32) || len(f[3]) != 32 || f[3] != strings.ToUpper(f[3]) ||
+			f[4] != "[U          ]" || f[5] != "LCT-5E0BE100" || f[6] != "" {
+			t.Errorf("smbpasswd line %q does not have Samba's layout", line)
+		}
+	}
 	if strings.Contains(conf+table, "alice-default") {
 		t.Errorf("an account carries the credential's name though the service names accounts by person")
 	}

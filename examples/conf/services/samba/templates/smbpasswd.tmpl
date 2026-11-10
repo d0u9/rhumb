@@ -4,6 +4,12 @@
 
   The name is the person's and the uid is their POSIX account's: the two
   name one account, which is what smbd requires of an entry.
+
+  A line is name:uid:LM:NT:[flags]:LCT-time:, parsed by position. It has no
+  LM hash (32 X), the flags of an ordinary enabled account, and a change
+  time fixed at 2020-01-01T00:00:00Z so the same inputs render the same
+  bytes. The time must not be zero: Samba reads that as "password must
+  change" and refuses every logon, which a client cannot satisfy.
 */ -}}
-{{ range $p := principals "smb" }}{{ smbpasswd $p.Name (required (index $.accounts.uids $p.User) (printf "accounts.uids: %s" $p.User)) $p.Secret }}
+{{ range $p := principals "smb" }}{{ printf "%s:%v:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:%s:[U          ]:LCT-5E0BE100:" $p.Name (required (index $.accounts.uids $p.User) (printf "accounts.uids: %s" $p.User)) (nthash $p.Secret) }}
 {{ end }}
