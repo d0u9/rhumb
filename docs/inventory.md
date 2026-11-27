@@ -51,7 +51,8 @@ The inventory states each of these once. The renderer derives the rest.
 | **secret** | One credential value, one file. |
 
 Two terms describe things the reader never writes. A **grant** is derived from a
-user's access list or from a route's hops; a **principal** is whatever holds one
+user's access list, from a route's hops, from a link or from a dial into a port
+that authenticates; a **principal** is whatever holds one
 — one of a person's credentials, or an upstream instance. They are named here
 because the secrets layout and the rendered account tables are organised by
 them.
@@ -1008,10 +1009,11 @@ loopback address chosen for two ends on one node is the caller's own
 container there. A host process dials `Address`. Which of the two is the
 template's choice, as it is for a proxy.
 
-A dial is not an edge. It grants nothing, carries no credential, adds no
-host mapping to the target's ports and plays no part in rule 8. A dependency
-that needs a credential, or that must be reachable from another node through
-a published port, is a route.
+A dial is not an edge. It adds no host mapping to the target's ports and
+plays no part in rule 8, and no route ever rides it. A dependency that must be
+reachable from another node through a published port is a route. The one
+thing a dial can carry is the caller's own account, when the port it dials
+asks for one: see [below](#dialling-a-port-that-authenticates).
 
 `dial` of a name the instance does not declare is a render error, not an
 empty string: the value is an address, and an empty one renders a file that
@@ -1034,6 +1036,60 @@ reaches. Two in the first scope holding any is an error naming them; so is
 none anywhere. A written dial always wins. The resolved dial is an ordinary
 dial from then on — the render, the tree and a migration see it — except that
 a migration never writes it into the file.
+
+### Dialling a port that authenticates
+
+A dial into a port whose service authenticates per principal is the caller's
+own account there. The principal is the instance itself, as it is for a
+link's `from` and for an upstream instance that names no `principal`: its
+account is its flat id, and its secret is filed under the dialled port like
+any other grant's.
+
+```yaml
+# services/broker/confgen.yaml
+auth: per-principal
+
+# services/mqtt-client/confgen.yaml
+dials:
+  mqtt: {service: broker, port: mqtt}
+```
+
+```text
+{{ with dial "mqtt" }}{{ .Address }}:{{ .Number }} {{ .Account }} {{ .Secret }}{{ end }}
+```
+
+A client on `srv` named `app-01` gets the account `srv-app-01`, filed at
+`srv/broker-01/mqtt/srv-app-01/default`. It reads only its own. The broker
+reads every account on the port with `principals "mqtt"`, beside the people a
+route grants there: a device reaching the same broker is granted by
+`users.yaml` and a route, as before, and lands in the same table.
+
+The server opts in by authenticating; nothing is written on the client
+beyond the dial it already declares. A dial into a port that authenticates
+nobody grants nothing, and `.Secret` there is a render error rather than an
+empty string. A missing secret fails `--check` and the render, naming the
+dial. The account is rendered into each file at export, so a client's bundle
+never reads the server's install directory, and installing either first
+makes no difference.
+
+Renaming the caller renames its account and so rotates it, as renaming a
+link's `from` does.
+
+Three other forms were considered and rejected:
+
+- **A link.** A link is a session between two nodes that route traffic
+  travels inside. An account is neither: its ends often share a node, and
+  any edge from a link's end to the other node rides the link, so a client
+  later becoming a route hop would send traffic to a broker that forwards
+  nothing.
+- **A key on the dial**, such as `account: true`. Dialling a port that
+  authenticates already says the caller needs an account; a key would only
+  repeat it.
+- **A user per program**, carried by `principal` over a route. It keeps every
+  grant in `users.yaml`, at the cost of a user, a route and a container
+  network scope a credential can reach, for each client. It stays open as an
+  extension: an instance naming a `principal` may later carry that user's
+  credential on a dial as it does upstream.
 
 ### What runs the process
 
@@ -2713,8 +2769,10 @@ grantees:    the same port's principals grouped by the person holding them:
              rendered per grantee. Principals belonging to nobody are absent
 dials:       the instance's declared dependencies, by name, each resolved as a
              downstreams entry is: instance, port, number, address, and the
-             published name when it has one. Read with dial "<name>"; a name
-             not declared is a render error
+             published name when it has one, and Account and Secret when
+             the dialled port authenticates per principal. Read with dial
+             "<name>"; a name not declared, or Secret where there is no
+             account, is a render error
 names:       for a network, DNS records with Name, Type, Value and Source:
              ports' published names at their entrance node, and hosts'
              names; for a container network of the rendering node, the names

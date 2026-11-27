@@ -656,6 +656,7 @@ func Derive(inv *inventory.Root, manifests map[string]confgen.Manifest) (*Model,
 		}
 	}
 
+	dialGrants(instances, manifests, m)
 	m.Grants = dedupeGrants(m.Grants)
 	sort.SliceStable(m.LinkMappings, func(i, j int) bool {
 		a, b := m.LinkMappings[i], m.LinkMappings[j]

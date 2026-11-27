@@ -104,6 +104,27 @@ type Downstream struct {
 	// Proxy is what the downstream asks of the proxy in front of it: its
 	// service's hints, overridden by its port's.
 	Proxy map[string]any
+	// Account is the caller's account at a dialled port that authenticates
+	// per principal, empty otherwise. Its secret is Secret.
+	Account string
+	secret  string
+}
+
+// Secret is the caller's secret at a dialled port that authenticates per
+// principal. Reading it from any other is an error, not an empty string: an
+// empty password renders a file that looks complete and authenticates
+// nothing.
+func (d Downstream) Secret() (string, error) {
+	if d.Account == "" {
+		return "", fmt.Errorf("%s:%s holds no account for this instance: the port does not authenticate per principal", d.Instance, d.Port)
+	}
+	return d.secret, nil
+}
+
+// WithAccount is d carrying the caller's account and secret at it.
+func (d Downstream) WithAccount(account, secret string) Downstream {
+	d.Account, d.secret = account, secret
+	return d
 }
 
 // Name is one entry of a network's name table.

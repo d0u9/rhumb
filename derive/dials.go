@@ -126,3 +126,46 @@ func ServiceDialIssues(inv *inventory.Root, manifests map[string]confgen.Manifes
 	sort.Strings(out)
 	return out
 }
+
+// dialGrants gives every instance dialling a port that authenticates per
+// principal its own account there: the instance itself, as a link's from
+// and an upstream instance with no principal already are. A dial into a
+// port that authenticates nobody grants nothing. A dial is still no edge:
+// this is the whole of what it adds. See
+// docs/inventory.md#dialling-a-port-that-authenticates.
+func dialGrants(instances map[string]instanceRef, manifests map[string]confgen.Manifest, m *Model) {
+	ids := make([]string, 0, len(instances))
+	for id := range instances {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		from := instances[id].inst
+		names := make([]string, 0, len(from.Dials))
+		for name := range from.Dials {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			hop, err := ParseHop(from.Dials[name])
+			if err != nil {
+				continue // validate reports it.
+			}
+			to, ok := instances[hop.Instance]
+			if !ok {
+				continue
+			}
+			if _, ok := to.inst.Ports[hop.Port]; !ok {
+				continue
+			}
+			if !PortAuthenticates(manifests[to.inst.Service], m, hop.Instance, hop.Port) {
+				continue
+			}
+			flat := inventory.FlatID(from.ID)
+			m.Grants = append(m.Grants, Grant{
+				Principal: Principal{Kind: PrincipalInstance, ID: from.ID, Name: flat, Group: flat, Slot: inventory.DefaultCredential},
+				Instance:  hop.Instance, Port: hop.Port,
+			})
+		}
+	}
+}

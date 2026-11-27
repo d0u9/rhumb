@@ -953,15 +953,43 @@ func (m Renderer) dialsFor(instance string) (map[string]render.Downstream, error
 		if err != nil {
 			return nil, fmt.Errorf("%s: dial %q: %w", instance, name, err)
 		}
-		out[name] = render.Downstream{
+		d := render.Downstream{
 			Instance:  inventory.LocalName(hop.Instance),
 			Port:      hop.Port,
 			Published: to.Ports[hop.Port].Published,
 			Address:   addr,
 			Number:    to.Ports[hop.Port].Number,
 		}
+		// A port that authenticates per principal holds this instance's
+		// own account, derived from the dial itself. A missing secret fails
+		// the render as any other grant's does.
+		// Without a secrets root, as for any upstream, the secret is empty.
+		if g, ok := m.dialGrant(instance, hop); ok {
+			var v string
+			if m.SecretsDir != "" {
+				v, err = secretstore.ReadValue(m.SecretsDir, m.storedAt(secretstore.Path{
+					Instance: hop.Instance, Port: hop.Port, Group: g.Principal.Group, Name: g.Principal.Slot,
+				}))
+				if err != nil {
+					return nil, fmt.Errorf("%s: dial %q: %w", instance, name, err)
+				}
+			}
+			d = d.WithAccount(g.Principal.Name, v)
+		}
+		out[name] = d
 	}
 	return out, nil
+}
+
+// dialGrant is the grant instance holds, as itself, on the port hop dials.
+func (m Renderer) dialGrant(instance string, hop derive.Hop) (derive.Grant, bool) {
+	for _, g := range m.Data.Derived.Grants {
+		if g.Instance == hop.Instance && g.Port == hop.Port &&
+			g.Principal.Kind == derive.PrincipalInstance && g.Principal.ID == instance {
+			return g, true
+		}
+	}
+	return derive.Grant{}, false
 }
 
 // realInstance finds a real instance and the node it runs on.
